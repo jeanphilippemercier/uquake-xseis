@@ -1,11 +1,13 @@
-#ifndef ARRAY2D_H
-#define ARRAY2D_H
+#ifndef ARRAY_H
+#define ARRAY_H
 #include <stdint.h>
 #include <iomanip>
 #include <iostream>
 #include <vector>
+#include <assert.h>
 // #include <stdlib.h>
 // #include <malloc.h>
+#include "xseis2/globals.h"
 
 // #define GSL_UNENFORCED_ON_CONTRACT_VIOLATION
 #include "gsl/span"
@@ -14,16 +16,11 @@
 // typedef std::vector<std::vector<IndexType>> VVui64; 
 // typedef std::vector<std::vector<uint16_t>> VVui16; 	
 
+
 namespace xseis {
 
-
-// const uint32_t CACHE_LINE = 64;
-// using Pad64 = const uint32_t 64;
-
-const uint32_t CACHE_LINE = 64;
-// const uint32_t MEM_ALIGNMENT = 16;
-const uint32_t MEM_ALIGNMENT = CACHE_LINE;
-
+template <typename ValueType>
+using VecOfSpans = std::vector<gsl::span<ValueType>>; 
 
 template<typename T>
 size_t PadToBytes(const size_t size, const uint32_t nbytes)
@@ -35,7 +32,6 @@ size_t PadToBytes(const size_t size, const uint32_t nbytes)
 	return size + ipad;
 }
 
-
 template <typename T>
 T* MallocAligned(const size_t N, const uint32_t alignment)
 {
@@ -43,13 +39,13 @@ T* MallocAligned(const size_t N, const uint32_t alignment)
 }
 
 
-template <typename ScalarType, typename IndexType=size_t>
+template <typename ValueType, typename IndexType=size_t>
 class Array2D {
 public:
 
 	const uint32_t alignment_ = MEM_ALIGNMENT;
-	using pointer = ScalarType*;
-	using reference = ScalarType&;
+	using pointer = ValueType*;
+	using reference = ValueType&;
 	IndexType nrow_;
 	IndexType ncol_;
 	IndexType ncol_pad_;
@@ -59,31 +55,32 @@ public:
 
 	Array2D() :data_(nullptr), nrow_(0), ncol_(0), ncol_pad_(0), owns_(false) {}
 
-	// init from existing c-array
-	Array2D(ScalarType *data, IndexType nrow, IndexType ncol, IndexType npad=0)
-	: data_(data), nrow_(nrow), ncol_(ncol), ncol_pad_(ncol - npad), owns_(false)
-	{
-		assert(ncol > npad);
-	}
+	// // init from existing c-array
+	// Array2D(ValueType *data, IndexType nrow, IndexType ncol, IndexType npad=0)
+	// : data_(data), nrow_(nrow), ncol_(ncol), ncol_pad_(ncol - npad), owns_(false)
+	// {
+	// 	assert(ncol > npad);
+	// }
 
 	// init and allocate dynamic memory
 	Array2D(IndexType nrow, IndexType ncol): nrow_(nrow), ncol_(ncol), owns_(true)
 	{
-		ncol_pad_ = PadToBytes<ScalarType>(ncol, alignment_);
-		data_ = MallocAligned<ScalarType>(nrow_ * ncol_pad_, alignment_);
+		ncol_pad_ = PadToBytes<ValueType>(ncol, alignment_);
+		data_ = MallocAligned<ValueType>(nrow_ * ncol_pad_, alignment_);
 		assert(ncol_pad_ >= ncol);		
 	}
 
 	~Array2D() { if (owns_==true) free(data_); }
 
-	std::vector<gsl::span<ScalarType>> rows()
+	VecOfSpans<ValueType> rows()
 	{
-		std::vector<gsl::span<ScalarType>> rows;
+		VecOfSpans<ValueType> rows;
 		rows.reserve(nrow_);
 
 		for(size_t i = 0; i < nrow_; ++i) 
 		{
-			rows.emplace_back(this->operator()(i));
+			rows.emplace_back(this->span(i));
+			// rows.emplace_back(this->operator()(i));
 		}
 		return rows;
 	}
@@ -104,7 +101,8 @@ public:
 	// value at ix, iy
 	constexpr reference operator() (IndexType ix_row, IndexType ix_col) const { return (row(ix_row) + ix_col)[0]; }
 	// row as view
-	constexpr gsl::span<ScalarType> operator() (IndexType ix_row) const
+	// constexpr gsl::span<ValueType> operator() (IndexType ix_row) const
+	constexpr gsl::span<ValueType> span(IndexType ix_row) const
 	{
 		return gsl::make_span(row(ix_row), ncol_);
 	}
@@ -112,13 +110,50 @@ public:
 }; // end Array2D
 
 
+template <typename ValueType, typename IndexType=size_t>
+class Vector {
+public:
+
+	const uint32_t alignment_ = MEM_ALIGNMENT;
+	using pointer = ValueType*;
+	using reference = ValueType&;
+	IndexType size_;
+	pointer data_;
+	bool owns_; // data ownership
+
+	Vector() :data_(nullptr), size_(0), owns_(false) {}
+
+	// init from existing c-array
+	Vector(ValueType *data, IndexType size) : data_(data), size_(size), owns_(false) {}
+
+	// init and allocate dynamic memory
+	Vector(IndexType size): size_(size)
+	{		
+		data_ = MallocAligned<ValueType>(size_, alignment_);
+	}
+
+	~Vector() { if (owns_==true) free(data_); }
+
+	constexpr gsl::span<ValueType> const span()
+	{
+		return gsl::make_span(data_, size_);
+	}
+
+	constexpr IndexType size() const noexcept { return size_; }
+	constexpr pointer data() const noexcept { return data_; }	
+
+}; // end Vector
+
+
+
 } // end namespace xseis
 
 
 template<typename T>
 std::ostream &operator <<(std::ostream &os, const gsl::span<T> &v) {
-	std::copy(v.begin(), v.end(), std::ostream_iterator<T>(os, " "));
-	return os;
+	os << "[ " ;
+	for (auto&& x : v) os << std::left << std::setw(10) << x;
+	return os << " ]";
 }
 
 template<typename T>
@@ -139,75 +174,6 @@ std::ostream &operator <<(std::ostream &os, xseis::Array2D<T> &arr) {
 	// std::copy(v.begin(), v.end(), std::ostream_iterator<T>(os, " "));
 	return os;
 }
-
-
-// template <typename T, std::size_t N = 16>
-// class AlignmentAllocator {
-// public:
-//   typedef T value_type;
-//   typedef std::size_t size_type;
-//   typedef std::ptrdiff_t difference_type;
-
-//   typedef T * pointer;
-//   typedef const T * const_pointer;
-
-//   typedef T & reference;
-//   typedef const T & const_reference;
-
-//   public:
-//   inline AlignmentAllocator () throw () { }
-
-//   template <typename T2>
-//   inline AlignmentAllocator (const AlignmentAllocator<T2, N> &) throw () { }
-
-//   inline ~AlignmentAllocator () throw () { }
-
-//   inline pointer adress (reference r) {
-//     return &r;
-//   }
-
-//   inline const_pointer adress (const_reference r) const {
-//     return &r;
-//   }
-
-//   inline pointer allocate (size_type n) {
-//      return (pointer) aligned_alloc(N, n * sizeof(value_type));
-//   }
-
-//   inline void deallocate (pointer p, size_type) {
-//     _aligned_free (p);
-//   }
-
-//   inline void construct (pointer p, const value_type & wert) {
-//      new (p) value_type (wert);
-//   }
-
-//   inline void destroy (pointer p) {
-//     p->~value_type ();
-//   }
-
-//   inline size_type max_size () const throw () {
-//     return size_type (-1) / sizeof (value_type);
-//   }
-
-//   template <typename T2>
-//   struct rebind {
-//     typedef AlignmentAllocator<T2, N> other;
-//   };
-
-//   bool operator!=(const AlignmentAllocator<T,N>& other) const  {
-//     return !(*this == other);
-//   }
-
-//   // Returns true if and only if storage allocated from *this
-//   // can be deallocated from other, and vice versa.
-//   // Always returns true for stateless allocators.
-//   bool operator==(const AlignmentAllocator<T,N>& other) const {
-//     return true;
-//   }
-// };
-
-
 
 
 #endif
