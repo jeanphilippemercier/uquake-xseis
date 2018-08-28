@@ -141,8 +141,38 @@ public:
 
 	constexpr IndexType size() const noexcept { return size_; }
 	constexpr pointer data() const noexcept { return data_; }	
+	constexpr reference operator[] (IndexType ix) const { return data_[ix]; }
+
 
 }; // end Vector
+
+
+
+template<typename T>
+std::vector<T> Linspace(T start, T stop, size_t size){
+
+		std::vector<T> vec;
+		vec.reserve(size);
+		float step = (stop - start) / static_cast<float>(size);
+
+		for (size_t i = 0; i < size; ++i) {
+			vec.push_back(start + step * static_cast<float>(i));
+		}
+		return vec;
+	}
+
+	
+template<typename T>
+std::vector<T> Arange(T start, T stop, T step = 1) {
+	std::vector<T> values;
+	values.reserve((stop - start) / step);
+	
+	for (T value = start; value < stop; value += step){
+			values.push_back(value);
+	}
+
+	return values;
+}
 
 
 

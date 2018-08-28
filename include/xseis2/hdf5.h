@@ -81,9 +81,17 @@ public:
 		}
 	}
 
+	// template <typename T>
+	// std::vector<T> LoadVector() {
+	// 	std::vector<T> vec(ncol_);
+	// 	H5::DataSpace mspace(1, shape_);
+	// 	dset_.read(&vec[0], dtype_, mspace, filespace_);
+	// 	return vec;
+	// }
+
 	template <typename T>
-	std::vector<T> LoadVector() {
-		std::vector<T> vec(ncol_);
+	Vector<T> LoadVector() {
+		auto vec = Vector<T>(ncol_);
 		H5::DataSpace mspace(1, shape_);
 		dset_.read(&vec[0], dtype_, mspace, filespace_);
 		return vec;
