@@ -44,6 +44,17 @@ inline float DistCartesian2D(float* a, float* b)
 }
 
 
+inline float DistCartesian(gsl::span<float> a, gsl::span<float> b)
+{	
+	// float val = 0;
+	float v[3];
+	v[0] = a[0] - b[0];
+	v[1] = a[1] - b[1];
+	v[2] = a[2] - b[2];
+	return std::sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]);
+}
+
+
 float DistDiff(float* a, float* b, float* c) {	
 	return DistCartesian(a, c) - DistCartesian(b, c);
 }
@@ -53,20 +64,17 @@ uint mod_floor(int a, int n) {
 }
 
 
-// Vector<Complex> BuildPhaseShiftVec(size_t const nfreq, int const nshift) {
+void BuildPhaseShiftVec(gsl::span<Complex> vec, int const nshift) {
 	
-// 	auto v = Vector<Complex>(nfreq);
-// 	// std::vector<Complex> v(nfreq);
-// 	float const fstep = 0.5 / (nfreq - 1);
-// 	float const factor = nshift * 2 * M_PI * fstep;
+	uint32_t nfreq = vec.size();
+	float const fstep = 0.5 / (nfreq - 1);
+	float const factor = nshift * 2 * M_PI * fstep;
 
-// 	for(size_t i = 0; i < nfreq; ++i) {
-// 		v[i][0] = std::cos(i * factor);
-// 		v[i][1] = std::sin(i * factor);			
-// 	}
-
-// 	return v;
-// }
+	for(size_t i = 0; i < nfreq; ++i) {
+		vec[i][0] = std::cos(i * factor);
+		vec[i][1] = std::sin(i * factor);			
+	}
+}
 
 
 // Mutiply sig1 by sig2 (x + yi)(u + vi) = (xu-yv) + (xv+yu)i
