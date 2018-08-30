@@ -142,7 +142,8 @@ public:
 	constexpr IndexType size() const noexcept { return size_; }
 	constexpr pointer data() const noexcept { return data_; }	
 	constexpr reference operator[] (IndexType ix) const { return data_[ix]; }
-
+	constexpr pointer begin() const noexcept { return data_;}
+	constexpr pointer end() const noexcept {return data_ + size_;}
 
 }; // end Vector
 

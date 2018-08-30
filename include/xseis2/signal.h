@@ -12,15 +12,26 @@
 namespace xseis {
 
 
-template<typename Container>
-float Max(Container& data) {
+template<typename T>
+T Max(gsl::span<T> data) {
 	return *std::max_element(data.begin(), data.end());
 }
 
-template<typename Container>
-float Min(Container& data) {
+template<typename T>
+T Min(gsl::span<T> data) {
 	return *std::min_element(data.begin(), data.end());
 }
+
+
+// template<typename Container>
+// float Max(Container& data) {
+// 	return *std::max_element(data.begin(), data.end());
+// }
+
+// template<typename Container>
+// float Min(Container& data) {
+// 	return *std::min_element(data.begin(), data.end());
+// }
 
 inline float AngleBetweenPoints(float* a, float*b) 
 {
@@ -65,7 +76,7 @@ uint mod_floor(int a, int n) {
 
 
 void BuildPhaseShiftVec(gsl::span<Complex> vec, int const nshift) {
-	
+
 	uint32_t nfreq = vec.size();
 	float const fstep = 0.5 / (nfreq - 1);
 	float const factor = nshift * 2 * M_PI * fstep;
@@ -137,7 +148,7 @@ void Whiten(Complex* const sig, uint32_t const npts)
 }
 
 #pragma omp declare simd aligned(sig, out:MEM_ALIGNMENT)
-void Absolute(Complex const* const sig, float* out, uint32_t const npts)
+void Absolute(Complex const* const sig, uint32_t const npts, float* out)
 {		
 	#pragma omp simd aligned(sig, out:MEM_ALIGNMENT)
 	for(uint32_t i = 0; i < npts; ++i) {
@@ -300,6 +311,35 @@ void Fill(float* data, size_t npts, float val)
 		data[i] = val;		
 	}
 }
+
+template<typename T>
+void Fill(gsl::span<T> data, float val) {
+	Fill(&data[0], data.size(), val);
+}
+
+
+float Energy(gsl::span<float> const data)
+{
+	float total = 0;
+	for(auto&& i : data) total += i * i;	
+	return total;
+}	
+
+void Copy(Complex const *in, size_t npts, Complex *out)
+{		
+	std::copy(&(in)[0][0], &(in + npts)[0][0], &out[0][0]);
+}
+
+void Copy(float const *in, size_t npts, float *out)
+{		
+	std::copy(in, in + npts, out);
+}
+
+
+// template<typename T>
+// void Copy(gsl::span<T> data, float val) {
+// 	Copy(&data[0], data.size(), val);
+// }
 
 
 
