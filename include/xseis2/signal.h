@@ -1,5 +1,4 @@
-#ifndef SIGNAL_H
-#define SIGNAL_H
+#pragma once
 
 #include <omp.h>
 #include <fftw3.h>
@@ -13,6 +12,11 @@ namespace xseis {
 const int FFTW_PATIENCE = FFTW_PATIENT;
 // const int FFTW_PATIENCE = FFTW_WISDOM_ONLY;
 
+template<typename T>
+void Roll(gsl::span<T> sig, long nroll)
+{
+	std::rotate(sig.begin(), sig.begin() + nroll, sig.end());
+}
 
 template<typename T>
 T Max(gsl::span<T> data) {
@@ -24,16 +28,16 @@ T Min(gsl::span<T> data) {
 	return *std::min_element(data.begin(), data.end());
 }
 
+template<typename T>
+size_t ArgMax(gsl::span<T> data) {
+	return std::distance(data.begin(), std::max_element(data.begin(), data.end()));
+}
 
-// template<typename Container>
-// float Max(Container& data) {
-// 	return *std::max_element(data.begin(), data.end());
-// }
+template<typename T>
+size_t ArgMin(gsl::span<T> data) {
+	return std::distance(data.begin(), std::min_element(data.begin(), data.end()));
+}
 
-// template<typename Container>
-// float Min(Container& data) {
-// 	return *std::min_element(data.begin(), data.end());
-// }
 
 uint mod_floor(int a, int n) {
 	return ((a % n) + n) % n;
@@ -118,7 +122,7 @@ void Absolute(float* sig, uint32_t const npts)
 }
 
 
-// Cross-correlate complex signals, cc(f) = s1(f) x s2*(f)
+// Cross-correlate complex signals, cc(f) = s1*(f) x s2(f)
 #pragma omp declare simd aligned(sig1, sig2, out:MEM_ALIGNMENT)
 void XCorr(Complex const* const sig1, Complex const* const sig2,
 		   Complex* const out, uint32_t const nfreq)
@@ -130,28 +134,38 @@ void XCorr(Complex const* const sig1, Complex const* const sig2,
 	}
 }
 
-#pragma omp declare simd aligned(sig1, sig2:MEM_ALIGNMENT)
-float DotProductEnergy(float const* const sig1, float const* const sig2, uint32_t const npts)
+#pragma omp declare simd aligned(sig1, sig2, out:MEM_ALIGNMENT)
+void XCorr(Complex32 const* const sig1, Complex32 const* const sig2,
+		   Complex32* const out, uint32_t const nfreq)
 {
-	float result = 0;
-	#pragma omp simd aligned(sig1, sig2:MEM_ALIGNMENT)
-	for (uint32_t i = 0; i < npts; ++i){
-		// result += sig1[0] * sig2[0];		
-		result += (sig1[0] * sig2[0]) * (sig1[0] * sig2[0]);		
+	#pragma omp simd aligned(sig1, sig2, out:MEM_ALIGNMENT)
+	for (uint32_t i = 0; i < nfreq; ++i){
+		out[i] = std::conj(sig1[i]) * sig2[i];
 	}
-	return result;
 }
 
-#pragma omp declare simd aligned(sig1, sig2:MEM_ALIGNMENT)
-float DotProduct(float const* const sig1, float const* const sig2, uint32_t const npts)
-{
-	float result = 0;
-	#pragma omp simd aligned(sig1, sig2:MEM_ALIGNMENT)
-	for (uint32_t i = 0; i < npts; ++i){
-		result += sig1[0] * sig2[0];		
-	}
-	return result;
-}
+// #pragma omp declare simd aligned(sig1, sig2:MEM_ALIGNMENT)
+// float DotProductEnergy(float const* const sig1, float const* const sig2, uint32_t const npts)
+// {
+// 	float result = 0;
+// 	#pragma omp simd aligned(sig1, sig2:MEM_ALIGNMENT)
+// 	for (uint32_t i = 0; i < npts; ++i){
+// 		// result += sig1[0] * sig2[0];		
+// 		result += (sig1[0] * sig2[0]) * (sig1[0] * sig2[0]);		
+// 	}
+// 	return result;
+// }
+
+// #pragma omp declare simd aligned(sig1, sig2:MEM_ALIGNMENT)
+// float DotProduct(float const* const sig1, float const* const sig2, uint32_t const npts)
+// {
+// 	float result = 0;
+// 	#pragma omp simd aligned(sig1, sig2:MEM_ALIGNMENT)
+// 	for (uint32_t i = 0; i < npts; ++i){
+// 		result += sig1[0] * sig2[0];		
+// 	}
+// 	return result;
+// }
 
 
 void TaperCosine(gsl::span<float> sig, uint32_t const len_taper)
@@ -171,6 +185,13 @@ void TaperCosine(gsl::span<float> sig, uint32_t const len_taper)
 void Multiply(float *sig, size_t npts, float val){
 	for (size_t i = 0; i < npts; ++i){
 		sig[i] *= val;
+	}
+}
+
+void Multiply(Complex32* data, size_t npts, float val)
+{		
+	for(size_t i = 0; i < npts; ++i) {
+		data[i] *= val;
 	}
 }
 
@@ -304,7 +325,6 @@ void ApplyFreqFilterReplace(const gsl::span<float> filter, gsl::span<Complex> fs
 }
 
 
-
 Array2D<Complex> WhitenAndFFT(Array2D<float>& dat, float sr, std::vector<float> cfreqs) 
 {
 	size_t nchan = dat.nrow();
@@ -428,7 +448,6 @@ void XCorrChanGroupsEnvelope(Array2D<Complex>& fdat, KeyGroups& groups, VecOfSpa
 
 }
 
-#endif
 
 
 

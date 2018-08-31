@@ -1,9 +1,9 @@
-#ifndef CORE_H
-#define CORE_H
+#pragma once
 
 #include <iomanip>
 #include <iostream>
 #include <vector>
+#include <complex>
 #include <assert.h>
 #include <stdint.h>
 #include <vector>
@@ -19,6 +19,7 @@ namespace xseis {
 const uint32_t CACHE_LINE = 64;
 const uint32_t MEM_ALIGNMENT = CACHE_LINE;
 using Complex = float[2];
+using Complex32 = std::complex<float>;
 
 template <typename ValueType>
 using VecOfSpans = std::vector<gsl::span<ValueType>>; 
@@ -41,6 +42,43 @@ T* MallocAligned(const size_t N, const uint32_t alignment=MEM_ALIGNMENT)
 	return (T*) aligned_alloc(alignment, N * sizeof(T));
 }
 
+
+template <typename ValueType, typename IndexType=size_t>
+class Vector {
+public:
+
+	const uint32_t alignment_ = MEM_ALIGNMENT;
+	using pointer = ValueType*;
+	using reference = ValueType&;
+	IndexType size_;
+	pointer data_;
+	bool owns_; // data ownership
+
+	Vector() :data_(nullptr), size_(0), owns_(false) {}
+
+	// init from existing c-array
+	Vector(ValueType *data, IndexType size) : data_(data), size_(size), owns_(false) {}
+
+	// init and allocate dynamic memory
+	Vector(IndexType size): size_(size)
+	{		
+		data_ = MallocAligned<ValueType>(size_, alignment_);
+	}
+
+	~Vector() { if (owns_==true) free(data_); }
+
+	constexpr gsl::span<ValueType> const span()
+	{
+		return gsl::make_span(data_, size_);
+	}
+
+	constexpr IndexType size() const noexcept { return size_; }
+	constexpr pointer data() const noexcept { return data_; }	
+	constexpr reference operator[] (IndexType ix) const { return data_[ix]; }
+	constexpr pointer begin() const noexcept { return data_;}
+	constexpr pointer end() const noexcept {return data_ + size_;}
+
+}; // end Vector
 
 
 template <typename ValueType, typename IndexType=size_t>
@@ -111,45 +149,19 @@ public:
 		return gsl::make_span(row(ix_row), ncol_);
 	}
 
+	Vector<ValueType> copy_col(size_t icol) 
+	{
+		auto vec = Vector<ValueType>(nrow());
+		
+		for (size_t i = 0; i < nrow(); ++i) {
+			vec[i] = this->row(i)[icol];
+		}
+		
+		return vec;	
+	}
+
 }; // end Array2D
 
-
-template <typename ValueType, typename IndexType=size_t>
-class Vector {
-public:
-
-	const uint32_t alignment_ = MEM_ALIGNMENT;
-	using pointer = ValueType*;
-	using reference = ValueType&;
-	IndexType size_;
-	pointer data_;
-	bool owns_; // data ownership
-
-	Vector() :data_(nullptr), size_(0), owns_(false) {}
-
-	// init from existing c-array
-	Vector(ValueType *data, IndexType size) : data_(data), size_(size), owns_(false) {}
-
-	// init and allocate dynamic memory
-	Vector(IndexType size): size_(size)
-	{		
-		data_ = MallocAligned<ValueType>(size_, alignment_);
-	}
-
-	~Vector() { if (owns_==true) free(data_); }
-
-	constexpr gsl::span<ValueType> const span()
-	{
-		return gsl::make_span(data_, size_);
-	}
-
-	constexpr IndexType size() const noexcept { return size_; }
-	constexpr pointer data() const noexcept { return data_; }	
-	constexpr reference operator[] (IndexType ix) const { return data_[ix]; }
-	constexpr pointer begin() const noexcept { return data_;}
-	constexpr pointer end() const noexcept {return data_ + size_;}
-
-}; // end Vector
 
 
 
@@ -264,5 +276,3 @@ std::ostream &operator <<(std::ostream &os, xseis::Array2D<T> &arr) {
 	return os;
 }
 
-
-#endif

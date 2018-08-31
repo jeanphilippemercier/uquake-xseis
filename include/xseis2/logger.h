@@ -1,5 +1,4 @@
-#ifndef LOGGER_H
-#define LOGGER_H
+#pragma once
 
 #include <chrono>
 #include <string>
@@ -79,4 +78,3 @@ public:
 };
 
 }
-#endif
