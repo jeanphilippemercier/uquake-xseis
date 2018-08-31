@@ -7,7 +7,7 @@
 // #include <stdlib.h>
 // #include <malloc.h>
 #include "cnpy.h"
-#include "xseis2/array.h"
+#include "xseis2/core.h"
 
 // #define GSL_UNENFORCED_ON_CONTRACT_VIOLATION
 // #include "gsl/span"
@@ -22,9 +22,6 @@ template<typename T> void NpySave(std::string fname, Array2D<T>& data) {
 
 	std::vector<size_t> shape {data.nrow_, data.ncol_};
 	std::vector<char> header = cnpy::create_npy_header<T>(shape);
-	// std::cout << "shape: " << shape << '\n';
-	// size_t nels = std::accumulate(shape.begin(),shape.end(),1,std::multiplies<size_t>());
-	// size_t nels = data.size();
 
 	FILE* fp = fopen(fname.c_str(),"wb");
 
@@ -39,7 +36,7 @@ template<typename T> void NpySave(std::string fname, Array2D<T>& data) {
 	fclose(fp);
 }
 
-template<typename T> void NpySave(std::string fname, std::vector<T>& data, std::string mode = "w") {
+template<typename T> void NpySave(std::string fname, gsl::span<T> data, std::string mode = "w") {
 
 	std::vector<size_t> shape;
 	shape.push_back(data.size());

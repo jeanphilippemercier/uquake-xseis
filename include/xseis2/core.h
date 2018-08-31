@@ -1,26 +1,29 @@
-#ifndef ARRAY_H
-#define ARRAY_H
-#include <stdint.h>
+#ifndef CORE_H
+#define CORE_H
+
 #include <iomanip>
 #include <iostream>
 #include <vector>
 #include <assert.h>
-// #include <stdlib.h>
-// #include <malloc.h>
-#include "xseis2/globals.h"
+#include <stdint.h>
+#include <vector>
+#define _USE_MATH_DEFINES
+#include <cmath>
 
 // #define GSL_UNENFORCED_ON_CONTRACT_VIOLATION
 #include "gsl/span"
 
 
-// typedef std::vector<std::vector<IndexType>> VVui64; 
-// typedef std::vector<std::vector<uint16_t>> VVui16; 	
-
-
 namespace xseis {
+
+const uint32_t CACHE_LINE = 64;
+const uint32_t MEM_ALIGNMENT = CACHE_LINE;
+using Complex = float[2];
 
 template <typename ValueType>
 using VecOfSpans = std::vector<gsl::span<ValueType>>; 
+
+using KeyGroups = std::vector<std::vector<uint16_t>>; 
 
 template<typename T>
 size_t PadToBytes(const size_t size, const uint32_t nbytes)
@@ -33,10 +36,11 @@ size_t PadToBytes(const size_t size, const uint32_t nbytes)
 }
 
 template <typename T>
-T* MallocAligned(const size_t N, const uint32_t alignment)
+T* MallocAligned(const size_t N, const uint32_t alignment=MEM_ALIGNMENT)
 {
 	return (T*) aligned_alloc(alignment, N * sizeof(T));
 }
+
 
 
 template <typename ValueType, typename IndexType=size_t>
@@ -146,6 +150,60 @@ public:
 	constexpr pointer end() const noexcept {return data_ + size_;}
 
 }; // end Vector
+
+
+
+class Grid {
+public:
+	// lims = {xmin, xmax, ymin, ymax, zmin, zmax, spacing}
+	std::vector<float> lims;
+	float spacing;
+	float xmin, ymin, zmin;	
+	size_t nx, ny, nz;
+	float dx, dy, dz;
+	size_t npts;
+
+
+	Grid() {}
+	Grid(std::vector<float> lims):
+	lims(lims), spacing(lims[6]), xmin(lims[0]), ymin(lims[2]), zmin(lims[4]){
+
+		float xrange = lims[1] - lims[0];
+		float yrange = lims[3] - lims[2];
+		float zrange = lims[5] - lims[4];
+
+		nx = std::abs(xrange) / spacing;
+		ny = std::abs(yrange) / spacing;
+		nz = std::abs(zrange) / spacing;
+
+		dx = ((xrange > 0) - (xrange < 0)) * spacing;
+		dy = ((yrange > 0) - (yrange < 0)) * spacing;
+		dz = ((zrange > 0) - (zrange < 0)) * spacing;
+
+		npts = static_cast<size_t>(nx * ny * nz);
+		printf("Grid (%lu x %lu x %lu) = %lu\n", nx, ny, nz, npts);
+	}
+	~Grid(){}
+
+
+	Array2D<float> points(){
+
+		auto points = Array2D<float>(npts, 3);
+		size_t row_ix = 0;
+		
+		for (size_t i = 0; i < nx; ++i) {
+			for (size_t j = 0; j < ny; ++j) {
+				for (size_t k = 0; k < nz; ++k) {
+					points(row_ix, 0) = xmin + i * dx;
+					points(row_ix, 1) = ymin + j * dy;
+					points(row_ix, 2) = zmin + k * dz;
+					row_ix += 1;
+				}			
+			}
+		}
+		return points;
+	}	
+};
 
 
 

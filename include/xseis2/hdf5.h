@@ -6,8 +6,7 @@
 #include <numeric>
 
 #include "H5Cpp.h"
-// #include "xseis/structures.h"
-#include "xseis2/array.h"
+#include "xseis2/core.h"
 
 
 namespace xseis {
@@ -42,9 +41,9 @@ public:
 		
 		// size_ = shape_[0] * shape_[1];		
 		dtype_ = dset_.getDataType();
-		std::cout << "rank: " << rank_ << '\n';
-		std::cout << "nrow: " << nrow_ << '\n';
-		std::cout << "ncol: " << ncol_ << '\n';
+		// std::cout << "rank: " << rank_ << '\n';
+		// std::cout << "nrow: " << nrow_ << '\n';
+		// std::cout << "ncol: " << ncol_ << '\n';
 	}
 
 	template <typename T>	
