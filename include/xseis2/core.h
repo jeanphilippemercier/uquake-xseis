@@ -18,7 +18,7 @@ namespace xseis {
 
 const uint32_t CACHE_LINE = 64;
 const uint32_t MEM_ALIGNMENT = CACHE_LINE;
-using Complex = float[2];
+// using Complex = float[2];
 using Complex32 = std::complex<float>;
 
 template <typename ValueType>

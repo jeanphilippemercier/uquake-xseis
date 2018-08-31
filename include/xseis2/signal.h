@@ -38,49 +38,18 @@ size_t ArgMin(gsl::span<T> data) {
 	return std::distance(data.begin(), std::min_element(data.begin(), data.end()));
 }
 
+// uint32_t mod_floor(int a, int n) {
+// 	return ((a % n) + n) % n;
+// }
 
-uint mod_floor(int a, int n) {
-	return ((a % n) + n) % n;
-}
 
-
-// Mutiply sig1 by sig2 (x + yi)(u + vi) = (xu-yv) + (xv+yu)i
-// x + yi = s1[0] + s1[1]i
-// u + vi = s2[0] + s2[1]i
 #pragma omp declare simd aligned(sig1, sig2:MEM_ALIGNMENT)
-void Convolve(Complex const* const sig2, Complex* const sig1, uint32_t const nfreq)
+void Convolve(Complex32 const* const sig2, Complex32* const sig1, uint32_t const nfreq)
 {
-	float tmp;
 	#pragma omp simd aligned(sig1, sig2:MEM_ALIGNMENT)
-	for (uint32_t i = 0; i < nfreq; ++i){
-		tmp = sig1[i][0] * sig2[i][0] - sig1[i][1] * sig2[i][1];
-		sig1[i][1] = sig1[i][0] * sig2[i][1] + sig1[i][1] * sig2[i][0];
-		sig1[i][0] = tmp;
-	}
+	for (uint32_t i = 0; i < nfreq; ++i) sig1[i] *= sig2[i];
 }
 
-#pragma omp declare simd aligned(sig1, sig2, out:MEM_ALIGNMENT)
-inline void Convolve(Complex const* const sig1, Complex const* const sig2,
-		   Complex* const out, uint32_t const nfreq)
-{
-	#pragma omp simd aligned(sig1, sig2, out:MEM_ALIGNMENT)
-	for (uint32_t i = 0; i < nfreq; ++i){
-		out[i][0] = sig1[i][0] * sig2[i][0] - sig1[i][1] * sig2[i][1];
-		out[i][1] = sig1[i][0] * sig2[i][1] + sig1[i][1] * sig2[i][0];
-	}
-}
-
-
-#pragma omp declare simd aligned(data, stack:MEM_ALIGNMENT)
-inline void Accumulate(Complex const* const data, Complex* const stack,
-						 uint32_t const npts)
-{		
-	#pragma omp simd aligned(data, stack:MEM_ALIGNMENT)
-	for(uint32_t i = 0; i < npts; ++i) {
-		stack[i][0] += data[i][0];
-		stack[i][1] += data[i][1];
-	}
-}
 
 #pragma omp declare simd aligned(data, stack:MEM_ALIGNMENT)
 inline void Accumulate(float const* const data, float* const stack,
@@ -93,26 +62,6 @@ inline void Accumulate(float const* const data, float* const stack,
 }
 
 #pragma omp declare simd aligned(sig:MEM_ALIGNMENT)
-void Whiten(Complex* const sig, uint32_t const npts)
-{		
-	#pragma omp simd aligned(sig:MEM_ALIGNMENT)
-	for(uint32_t i = 0; i < npts; ++i) {
-		float abs = std::sqrt(sig[i][0] * sig[i][0] + sig[i][1] * sig[i][1]);
-		sig[i][0] /= abs;
-		sig[i][1] /= abs;
-	}
-}
-
-#pragma omp declare simd aligned(sig, out:MEM_ALIGNMENT)
-void Absolute(Complex const* const sig, uint32_t const npts, float* out)
-{		
-	#pragma omp simd aligned(sig, out:MEM_ALIGNMENT)
-	for(uint32_t i = 0; i < npts; ++i) {
-		out[i] = std::sqrt(sig[i][0] * sig[i][0] + sig[i][1] * sig[i][1]);
-	}
-}
-
-#pragma omp declare simd aligned(sig:MEM_ALIGNMENT)
 void Absolute(float* sig, uint32_t const npts)
 {		
 	#pragma omp simd aligned(sig:MEM_ALIGNMENT)
@@ -121,18 +70,6 @@ void Absolute(float* sig, uint32_t const npts)
 	}
 }
 
-
-// Cross-correlate complex signals, cc(f) = s1*(f) x s2(f)
-#pragma omp declare simd aligned(sig1, sig2, out:MEM_ALIGNMENT)
-void XCorr(Complex const* const sig1, Complex const* const sig2,
-		   Complex* const out, uint32_t const nfreq)
-{
-	#pragma omp simd aligned(sig1, sig2, out:MEM_ALIGNMENT)
-	for (uint32_t i = 0; i < nfreq; ++i){
-		out[i][0] = sig1[i][0] * sig2[i][0] + sig1[i][1] * sig2[i][1];
-		out[i][1] = sig1[i][0] * sig2[i][1] - sig1[i][1] * sig2[i][0];
-	}
-}
 
 #pragma omp declare simd aligned(sig1, sig2, out:MEM_ALIGNMENT)
 void XCorr(Complex32 const* const sig1, Complex32 const* const sig2,
@@ -188,103 +125,91 @@ void Multiply(float *sig, size_t npts, float val){
 	}
 }
 
-void Multiply(Complex32* data, size_t npts, float val)
-{		
-	for(size_t i = 0; i < npts; ++i) {
-		data[i] *= val;
-	}
-}
-
-void Multiply(Complex* data, size_t npts, float val)
-{		
-	for(size_t i = 0; i < npts; ++i) {
-		data[i][0] *= val;
-		data[i][1] *= val;
-	}
-}
+// void Multiply(Complex* data, size_t npts, float val)
+// {		
+// 	for(size_t i = 0; i < npts; ++i) {
+// 		data[i][0] *= val;
+// 		data[i][1] *= val;
+// 	}
+// }
 
 
 template<typename T>
-void Multiply(gsl::span<T> data, float val) {
-	Multiply(&data[0], data.size(), val);
+void Multiply(gsl::span<T> data, T val) {
+	// Multiply(data.data(), data.size(), val);
+	for(auto&& x : data) x *= val;
 }
 
-void Fill(Complex* data, size_t npts, float val)
-{		
-	for(size_t i = 0; i < npts; ++i) {
-		data[i][0] = val;
-		data[i][1] = val;
-	}
-}
+// void Fill(Complex* data, size_t npts, float val)
+// {		
+// 	for(size_t i = 0; i < npts; ++i) {
+// 		data[i][0] = val;
+// 		data[i][1] = val;
+// 	}
+// }
 
-void Fill(float* data, size_t npts, float val)
-{		
-	for(size_t i = 0; i < npts; ++i) {
-		data[i] = val;		
-	}
-}
+// void Fill(float* data, size_t npts, float val)
+// {		
+// 	for(size_t i = 0; i < npts; ++i) {
+// 		data[i] = val;		
+// 	}
+// }
 
 template<typename T>
-void Fill(gsl::span<T> data, float val) {
-	Fill(&data[0], data.size(), val);
+void Fill(gsl::span<T> data, T val) {
+	// Fill(data.data(), data.size(), val);
+	for(auto& x : data) x = val;
 }
-
 
 float Energy(gsl::span<float> const data)
 {
 	float total = 0;
-	for(auto&& i : data) total += i * i;	
+	for(auto&& x : data) total += x * x;	
 	return total;
 }
 
-float Energy(gsl::span<Complex> const data)
+float Energy(gsl::span<Complex32> const data)
 {
 	float total = 0;
-	for(auto&& v : data) total += v[0] * v[0] + v[1] * v[1];	
+	for(auto&& x : data) total += std::norm(x);	
 	return total;
-}	
-
-void Copy(Complex const *in, size_t npts, Complex *out)
-{		
-	std::copy(&(in)[0][0], &(in + npts)[0][0], &out[0][0]);
 }
 
-void Copy(float const *in, size_t npts, float *out)
+template<typename T>
+void Copy(T const *in, size_t npts, T *out)
 {		
 	std::copy(in, in + npts, out);
 }
 
-// template<typename T>
-// void Copy(gsl::span<T> data, float val) {
-// 	Copy(&data[0], data.size(), val);
-// }
+template<typename T>
+void Copy(gsl::span<T> const in, gsl::span<T> out) {
+	assert(in.size() == out.size());
+	std::copy(in.data(), in.end(), out.data());
+}
 
+Vector<Complex32> BuildPhaseShiftVec(size_t nfreq, int const nshift) {
 
-Vector<Complex> BuildPhaseShiftVec(size_t nfreq, int const nshift) {
-
-	auto vec = Vector<Complex>(nfreq);
-	float const fstep = 0.5 / (nfreq - 1);
+	auto vec = Vector<Complex32>(nfreq);
+	float const fstep = 0.5f / (nfreq - 1.0f);
 	float const factor = nshift * 2 * M_PI * fstep;
 
 	for(size_t i = 0; i < nfreq; ++i) {
-		vec[i][0] = std::cos(i * factor);
-		vec[i][1] = std::sin(i * factor);			
+		vec[i] = {std::cos(i * factor), std::sin(i * factor)};
 	}
 	return vec;
 }
 
 
-// void BuildFreqFilter(const std::vector<float>& corner_freqs, float const sr, gsl::span<float> filter)
 Vector<float> BuildFreqFilter(std::vector<float>& corner_freqs, uint32_t nfreq, float sr)
 {
 	float fsr = (nfreq * 2 - 1) / sr;
 
 	// whiten corners:  cutmin--porte1---porte2--cutmax
 	std::vector<uint32_t> cx;
-	for(auto&& cf : corner_freqs) cx.push_back(static_cast<uint32_t>(cf * fsr + 0.5));
+	for(auto&& cf : corner_freqs) cx.push_back(static_cast<uint32_t>(cf * fsr + 0.5f));
 
 	auto filter = Vector<float>(nfreq);	
-	Fill(filter.span(), 0);	
+	Fill(filter.span(), 0.0f);	
 
 	// int wlen = porte1 - cutmin;
 	float cosm_left = M_PI / (2. * (cx[1] - cx[0]));
@@ -308,73 +233,74 @@ Vector<float> BuildFreqFilter(std::vector<float>& corner_freqs, uint32_t nfreq, 
 	return filter;
 }
 
-void ApplyFreqFilterReplace(const gsl::span<float> filter, gsl::span<Complex> fsig)
+void ApplyFreqFilterReplace(const gsl::span<float> filter, gsl::span<Complex32> fsig)
 {
 	for (uint32_t i = 0; i < filter.size(); ++i)
 	{
 		if(filter[i] == 0) {
-			fsig[i][0] = 0;
-			fsig[i][1] = 0;
+			fsig[i] = {0, 0};
 		}
 		else {
-			float angle = std::atan2(fsig[i][1], fsig[i][0]);
-			fsig[i][0] = filter[i] * std::cos(angle);
-			fsig[i][1] = filter[i] * std::sin(angle);
+			float angle = std::arg(fsig[i]);
+			fsig[i] = {filter[i] * std::cos(angle), filter[i] * std::sin(angle)};
 		}		
 	}
 }
 
 
-Array2D<Complex> WhitenAndFFT(Array2D<float>& dat, float sr, std::vector<float> cfreqs) 
+Array2D<Complex32> WhitenAndFFT(Array2D<float>& dat, float sr, std::vector<float> cfreqs) 
 {
 	size_t nchan = dat.nrow();
 	size_t wlen = dat.ncol();
 	size_t nfreq = wlen / 2 + 1;
 	uint32_t taper_nsamp = 100;
 
-	auto fdat = Array2D<xseis::Complex>(nchan, nfreq);
+	auto fdat = Array2D<Complex32>(nchan, nfreq);
 
 	auto filter = BuildFreqFilter(cfreqs, nfreq, sr);
 	// float energy = Energy(filter.span()) * 2;
 
 	auto buf = Vector<float>(wlen);
-	fftwf_plan plan_fwd = fftwf_plan_dft_r2c_1d(wlen, buf.data(), fdat.row(0), FFTW_PATIENCE);
-	fftwf_plan plan_inv = fftwf_plan_dft_c2r_1d(wlen, fdat.row(0), buf.data(), FFTW_PATIENCE);
+	auto fptr = reinterpret_cast<fftwf_complex*>(fdat.row(0));	
+	fftwf_plan plan_fwd = fftwf_plan_dft_r2c_1d(wlen, buf.data(), fptr, FFTW_PATIENCE);
+	fftwf_plan plan_inv = fftwf_plan_dft_c2r_1d(wlen, fptr, buf.data(), FFTW_PATIENCE);
 
 	#pragma omp parallel for
 	for(size_t i = 0; i < dat.nrow(); ++i) {
-		fftwf_execute_dft_r2c(plan_fwd, dat.row(i), fdat.row(i));
+		auto fptr = reinterpret_cast<fftwf_complex*>(fdat.row(i));
+		fftwf_execute_dft_r2c(plan_fwd, dat.row(i), fptr);
 		ApplyFreqFilterReplace(filter.span(), fdat.span(i)); // apply whiten
-		fftwf_execute_dft_c2r(plan_inv, fdat.row(i), dat.row(i));
+		fftwf_execute_dft_c2r(plan_inv, fptr, dat.row(i));
 		TaperCosine(dat.span(i), taper_nsamp);
-		Multiply(dat.span(i), 1.0 / static_cast<float>(wlen));
-		fftwf_execute_dft_r2c(plan_fwd, dat.row(i), fdat.row(i));
+		Multiply(dat.span(i), 1.0f / static_cast<float>(wlen));
+		fftwf_execute_dft_r2c(plan_fwd, dat.row(i), fptr);
 	}
 
 	return fdat;
 }
 
+
 // ccf for each sta pair = stacked envelopes of inter-channel ccfs
-void XCorrChanGroupsEnvelope(Array2D<Complex>& fdat, KeyGroups& groups, VecOfSpans<uint16_t> pairs, Array2D<float>& ccdat) 
+void XCorrChanGroupsEnvelope(Array2D<Complex32>& fdat, KeyGroups& groups, VecOfSpans<uint16_t> pairs, Array2D<float>& ccdat) 
 {
 	uint32_t wlen = ccdat.ncol();
 	uint32_t nfreq = fdat.ncol();
 
 	// values to roll ccfs for zero lag in middle (conv in freq domain)
-	auto vshift = xseis::BuildPhaseShiftVec(nfreq, wlen / 2);
-	float energy = xseis::Energy(fdat.span(0)) * 2;
+	auto vshift = BuildPhaseShiftVec(nfreq, wlen / 2);
+	float energy = Energy(fdat.span(0)) * 2;
 	std::cout << "energy: " << energy << "\n";
 
-	// auto ftmp = xseis::Vector<xseis::Complex>(fdat.ncol());
-	// fftwf_plan plan_inv = fftwf_plan_dft_c2r_1d(ccdat.ncol(), ftmp.data(), ccdat.data(), FFTW_PATIENCE);
 
-
-	auto fb = xseis::Vector<xseis::Complex>(wlen); // only used for planning to not destroy fdat
-	fftwf_plan plan_c2c = fftwf_plan_dft_1d(wlen, fb.data(), fb.data(), FFTW_BACKWARD, FFTW_PATIENCE);
+	auto fb = Vector<Complex32>(wlen); // only used for planning to not destroy fdat
+	auto fptr = reinterpret_cast<fftwf_complex*>(fb.data());	
+	fftwf_plan plan_c2c = fftwf_plan_dft_1d(wlen, fptr, fptr, FFTW_BACKWARD, FFTW_PATIENCE);
 
 	#pragma omp parallel
 	{
-		auto fbuf = xseis::Vector<xseis::Complex>(wlen);
+		auto fbuf = Vector<Complex32>(wlen);
+		auto fptr = reinterpret_cast<fftwf_complex*>(fbuf.data());
+
 		auto fbuf_pos = gsl::make_span(fbuf.data(), fbuf.data() + wlen / 2);
 		auto fbuf_neg = gsl::make_span(fbuf.data() + wlen / 2, fbuf.end());
 
@@ -387,63 +313,29 @@ void XCorrChanGroupsEnvelope(Array2D<Complex>& fdat, KeyGroups& groups, VecOfSpa
 			uint32_t nstack = 0;		
 			for(auto&& k0 : groups[pair[0]]) {
 				for(auto&& k1 : groups[pair[1]]) {
-					xseis::Fill(fbuf_neg, 0);
-					xseis::XCorr(fdat.row(k0), fdat.row(k1), fbuf_pos.data(), fbuf_pos.size());
-					xseis::Multiply(fbuf_pos.subspan(1), 2.0);
-					xseis::Convolve(&vshift[0], fbuf_pos.data(), fbuf_pos.size());
+					Fill(fbuf_neg, {0.0f, 0.0f});
+					XCorr(fdat.row(k0), fdat.row(k1), fbuf_pos.data(), fbuf_pos.size());
+					Multiply(fbuf_pos.subspan(1), {2.0f, 0.0f});
+					Convolve(&vshift[0], fbuf_pos.data(), fbuf_pos.size());
 
-					fftwf_execute_dft(plan_c2c, fbuf.data(), fbuf.data());
-					xseis::Multiply(fbuf.span(), 1.0 / energy);
+					fftwf_execute_dft(plan_c2c, fptr, fptr);
+					Multiply(fbuf.span(), {1.0f / energy, 0.0f});
 
-					// xseis::Absolute(fbuf.data(), wlen, ccdat.row(nstack));
+					// Absolute(fbuf.data(), wlen, ccdat.row(nstack));
 					for(size_t j=0; j < fbuf.size(); ++j)
 					{
-						csig[j] += fbuf[j][0] * fbuf[j][0] + fbuf[j][1] * fbuf[j][1];	
+						// csig[j] += fbuf[j][0] * fbuf[j][0] + fbuf[j][1] * fbuf[j][1];	
+						csig[j] += std::norm(fbuf[j]);	
 					} 
 					nstack++;
 				}
 			}
-			xseis::Multiply(csig, wlen, 1.0 / nstack);		
+			Multiply(csig, wlen, 1.0f / static_cast<float>(nstack));		
 		}
 
 	}
 
 }
-
-
-	// // compute abs-valued cross-correlations (1 ccf per valid station pair)
-	// #pragma omp parallel
-	// {
-	// 	auto tmp = malloc_cache_align<float>(wl);
-	// 	auto ftmp = malloc_cache_align<fftwf_complex>(fl);
-
-	// 	#pragma omp for
-	// 	for(size_t i = 0; i < npair; ++i) {
-	// 		uint16_t *pair = spairs.row(i);
-	// 		float *csig = ccdat.row(i);
-	// 		std::fill(csig, csig + wl, 0);
-
-	// 		// sums absolute valued ccfs of all interstation channel pairs
-	// 		uint32_t nstack = 0;		
-	// 		for(auto&& k0 : groups[pair[0]]) {
-	// 			for(auto&& k1 : groups[pair[1]]) {
-
-	// 				process::XCorr(fdat.row(k0), fdat.row(k1), ftmp, fl);
-	// 				process::Convolve(&vshift[0], ftmp, fl);
-	// 				fftwf_execute_dft_c2r(plan_inv, ftmp, tmp);
-	// 				for(size_t j=0; j < wl; ++j) csig[j] += std::abs(tmp[j]);
-	// 				nstack++;
-	// 			}
-	// 		}
-	// 		process::Multiply(csig, wl, 1.0 / (nstack * energy)); // normalize
-	// 		process::EMA_NoAbs(csig, wl, cc_smooth_len, true); // EMA smoothing
-	// 	}
-	// 	free(tmp);
-	// 	free(ftmp);
-	// }
-	// clock.log("xcorr");
-
-
 
 
 }
