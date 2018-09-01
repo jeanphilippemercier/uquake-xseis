@@ -148,6 +148,8 @@ public:
 	{
 		return gsl::make_span(row(ix_row), ncol_);
 	}
+	// constexpr gsl::span<ValueType> operator[] (IndexType ix_row) const {return gsl::make_span(row(ix_row), ncol_);}
+
 
 	Vector<ValueType> copy_col(size_t icol) 
 	{

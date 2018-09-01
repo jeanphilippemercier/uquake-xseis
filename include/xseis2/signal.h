@@ -61,14 +61,31 @@ inline void Accumulate(float const* const data, float* const stack,
 	}
 }
 
-#pragma omp declare simd aligned(sig:MEM_ALIGNMENT)
-void Absolute(float* sig, uint32_t const npts)
-{		
-	#pragma omp simd aligned(sig:MEM_ALIGNMENT)
-	for(uint32_t i = 0; i < npts; ++i) {
-		sig[i] = std::abs(sig[i]);
+// #pragma omp declare simd aligned(sig:MEM_ALIGNMENT)
+// void Absolute(float* sig, uint32_t const npts)
+// {		
+// 	#pragma omp simd aligned(sig:MEM_ALIGNMENT)
+// 	for(uint32_t i = 0; i < npts; ++i) {
+// 		sig[i] = std::abs(sig[i]);
+// 	}
+// }
+
+void AbsCopy(gsl::span<Complex32> const in, gsl::span<float> out)
+{	
+	// #pragma omp simd aligned(sig:MEM_ALIGNMENT)
+	for(uint32_t i = 0; i < in.size(); ++i) {
+		out[i] = std::abs(in[i]);
 	}
 }
+
+
+// void NormCopy(gsl::span<Complex32> const in, gsl::span<float> out)
+// {	
+// 	// #pragma omp simd aligned(sig:MEM_ALIGNMENT)
+// 	for(uint32_t i = 0; i < in.size(); ++i) {
+// 		out[i] = std::norm(in[i]);
+// 	}
+// }
 
 
 #pragma omp declare simd aligned(sig1, sig2, out:MEM_ALIGNMENT)
@@ -119,11 +136,11 @@ void TaperCosine(gsl::span<float> sig, uint32_t const len_taper)
 }
 
 
-void Multiply(float *sig, size_t npts, float val){
-	for (size_t i = 0; i < npts; ++i){
-		sig[i] *= val;
-	}
-}
+// void Multiply(float *sig, size_t npts, float val){
+// 	for (size_t i = 0; i < npts; ++i){
+// 		sig[i] *= val;
+// 	}
+// }
 
 // void Multiply(Complex* data, size_t npts, float val)
 // {		
@@ -135,7 +152,7 @@ void Multiply(float *sig, size_t npts, float val){
 
 
 template<typename T>
-void Multiply(gsl::span<T> data, T val) {
+void Multiply(gsl::span<T> data, float val) {
 	// Multiply(data.data(), data.size(), val);
 	for(auto&& x : data) x *= val;
 }
@@ -159,6 +176,11 @@ template<typename T>
 void Fill(gsl::span<T> data, T val) {
 	// Fill(data.data(), data.size(), val);
 	for(auto& x : data) x = val;
+}
+
+template<typename T>
+void Stack(gsl::span<T> const in, gsl::span<T> stack) {
+	for(size_t i = 0; i < in.size(); ++i) {stack[i] += in[i];}
 }
 
 float Energy(gsl::span<float> const data)
@@ -315,13 +337,17 @@ void XCorrChanGroupsEnvelope(Array2D<Complex32>& fdat, KeyGroups& groups, VecOfS
 				for(auto&& k1 : groups[pair[1]]) {
 					Fill(fbuf_neg, {0.0f, 0.0f});
 					XCorr(fdat.row(k0), fdat.row(k1), fbuf_pos.data(), fbuf_pos.size());
-					Multiply(fbuf_pos.subspan(1), {2.0f, 0.0f});
+					// Multiply(fbuf_pos.subspan(1), {2.0f, 0.0f});
+					Multiply(fbuf_pos.subspan(1), 2.0f);
 					Convolve(&vshift[0], fbuf_pos.data(), fbuf_pos.size());
 
 					fftwf_execute_dft(plan_c2c, fptr, fptr);
-					Multiply(fbuf.span(), {1.0f / energy, 0.0f});
+					Multiply(fbuf.span(), 1.0f / energy);
+					// Multiply(fbuf.span(), {1.0f / energy, 0.0f});
 
 					// Absolute(fbuf.data(), wlen, ccdat.row(nstack));
+					// AbsCopy(fbuf.span(), dat.span(k));
+
 					for(size_t j=0; j < fbuf.size(); ++j)
 					{
 						// csig[j] += fbuf[j][0] * fbuf[j][0] + fbuf[j][1] * fbuf[j][1];	
@@ -330,13 +356,53 @@ void XCorrChanGroupsEnvelope(Array2D<Complex32>& fdat, KeyGroups& groups, VecOfS
 					nstack++;
 				}
 			}
-			Multiply(csig, wlen, 1.0f / static_cast<float>(nstack));		
+			// Multiply(csig, wlen, 1.0f / static_cast<float>(nstack));		
+			Multiply(gsl::make_span(csig, wlen), 1.0f / static_cast<float>(nstack));		
 		}
-
 	}
-
 }
 
+
+void RollSigs(VecOfSpans<float> signals, const KeyGroups& groups, gsl::span<uint16_t> const shifts) 
+{	
+	for(size_t i = 0; i < groups.size(); ++i) {
+		int rollby = static_cast<int>(shifts[i]);
+		for(auto& key : groups[i]) Roll(signals[key], rollby);			
+	}
+}
+
+Vector<float> StackSigs(VecOfSpans<float> const signals) 
+{	
+	auto stack = Vector<float>(signals[0].size());
+	Fill(stack.span(), 0.0f);
+	for(auto&& sig : signals) Stack(sig, stack.span());
+	return stack;
+}
+
+
+void Envelope(VecOfSpans<float> signals) 
+{
+	uint32_t wlen = signals[0].size();
+	uint32_t nfreq_r2c = wlen / 2 + 1;
+
+	auto buf = Vector<float>(wlen);
+	auto fbuf = Vector<Complex32>(wlen);
+	auto fptr = reinterpret_cast<fftwf_complex*>(fbuf.data());		
+
+	fftwf_plan plan_fwd = fftwf_plan_dft_r2c_1d(wlen, buf.data(), fptr, FFTW_PATIENCE);
+	fftwf_plan plan_c2c = fftwf_plan_dft_1d(wlen, fptr, fptr, FFTW_BACKWARD, FFTW_PATIENCE);
+	auto fbuf_pos = gsl::make_span(fbuf.data(), fbuf.data() + wlen / 2);
+	auto fbuf_neg = gsl::make_span(fbuf.data() + wlen / 2, fbuf.end());
+
+	for(auto& sig : signals) {
+		Fill(fbuf_neg, {0.0f, 0.0f});
+		fftwf_execute_dft_r2c(plan_fwd, sig.data(), fptr);
+		Multiply(fbuf_pos.subspan(1), 2.0f);
+		fftwf_execute(plan_c2c);
+		Multiply(fbuf.span(), 1.0 / static_cast<float>(wlen));		
+		AbsCopy(fbuf.span(), sig);		
+	}
+}
 
 }
 

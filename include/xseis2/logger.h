@@ -45,6 +45,7 @@ public:
 	std::vector<stamp> stamps;
 	std::chrono::time_point<clock> t0, tnow;
 	std::string color = clr::yellow;
+	uint32_t width = 15;
 
 	Logger(){
 		start();
@@ -65,15 +66,19 @@ public:
 	void summary(){
 		std::cout.precision(10);
 		std::cout << "_____________________________________________\n";
-		std::cout << std::left << std::setw(20) << "Name";
-		std::cout << std::left << std::setw(20) << "Time (ms)" << "\n";
+		std::cout << std::left << std::setw(width) << "Name";
+		std::cout << std::left << std::setw(width) << "Time (ms)" << "\n";
 		std::cout << "_____________________________________________\n";
+		double tot = 0;
 
 		for (auto&& stamp: stamps) {
 			double elapsed = (double) stamp.second.count() / 1000.;
-			std::cout << std::left << std::setw(20) << stamp.first;
-			std::cout << std::left << std::setw(20) << elapsed << "\n";
+			std::cout << std::left << std::setw(width) << stamp.first;
+			std::cout << std::left << std::setw(width) << elapsed << "\n";
+			tot += elapsed;
 		}
+		std::cout << std::left << std::setw(width) << "TOTAL";
+		std::cout << std::left << std::setw(width) << tot << "\n";
 	}	
 };
 
