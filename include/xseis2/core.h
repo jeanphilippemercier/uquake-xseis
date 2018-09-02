@@ -166,11 +166,10 @@ public:
 
 
 
-
 class Grid {
 public:
-	// lims = {xmin, xmax, ymin, ymax, zmin, zmax, spacing}
-	std::vector<float> lims;
+	// lims_ = {xmin, xmax, ymin, ymax, zmin, zmax, spacing}
+	std::vector<float> lims_;
 	float spacing;
 	float xmin, ymin, zmin;	
 	size_t nx, ny, nz;
@@ -180,11 +179,12 @@ public:
 
 	Grid() {}
 	Grid(std::vector<float> lims):
-	lims(lims), spacing(lims[6]), xmin(lims[0]), ymin(lims[2]), zmin(lims[4]){
+	lims_(lims), spacing(lims_[6]), xmin(lims_[0]), ymin(lims_[2]), zmin(lims_[4]){
 
-		float xrange = lims[1] - lims[0];
-		float yrange = lims[3] - lims[2];
-		float zrange = lims[5] - lims[4];
+		assert(lims.size() == 7);
+		float xrange = lims_[1] - lims_[0];
+		float yrange = lims_[3] - lims_[2];
+		float zrange = lims_[5] - lims_[4];
 
 		nx = std::abs(xrange) / spacing;
 		ny = std::abs(yrange) / spacing;
@@ -198,6 +198,8 @@ public:
 		printf("Grid (%lu x %lu x %lu) = %lu\n", nx, ny, nz, npts);
 	}
 	~Grid(){}
+
+	gsl::span<float> lims() { return gsl::make_span(lims_); }
 
 
 	Array2D<float> points(){

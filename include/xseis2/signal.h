@@ -376,6 +376,7 @@ Vector<float> StackSigs(VecOfSpans<float> const signals)
 	auto stack = Vector<float>(signals[0].size());
 	Fill(stack.span(), 0.0f);
 	for(auto&& sig : signals) Stack(sig, stack.span());
+	Multiply(stack.span(), 1.0f / signals.size());
 	return stack;
 }
 
