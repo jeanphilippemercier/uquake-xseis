@@ -48,7 +48,7 @@ float DistDiff(float* a, float* b, float* c) {
 
 // Divide grid into blocks to prevent cache invalidations while writing to buffer from multiple threads
 // Requires all rows are aligned and blocksize is a multiple of alignment 
-void InterLocBlocks(const VecOfSpans<float> data_cc, const VecOfSpans<uint16_t> ckeys, const VecOfSpans<uint16_t> ttable, gsl::span<float> output, uint32_t blocksize=1024 * 8, float scale_pwr=100)
+void InterLocBlocks(const VecOfSpans<float> data_cc, const VecOfSpans<uint16_t> ckeys, const VecOfSpans<uint16_t> ttable, gsl::span<float> output, uint32_t blocksize=1024 * 8, float scale_pwr=1.0)
 {	
 	// note asserts incorrectly pass when called through cython with python owned memory
 	assert((uintptr_t) data_cc[1].data() % MEM_ALIGNMENT == 0);

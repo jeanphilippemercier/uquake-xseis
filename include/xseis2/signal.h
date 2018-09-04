@@ -209,7 +209,26 @@ void Copy(gsl::span<T> const in, gsl::span<T> out) {
 	std::copy(in.data(), in.end(), out.data());
 }
 
-Vector<Complex32> BuildPhaseShiftVec(size_t nfreq, int const nshift) {
+std::vector<float> RowMaxes (const VecOfSpans<float> dat)
+{	
+	std::vector<float> maxes;
+	maxes.reserve(dat.size());
+	for(auto&& x : dat) maxes.emplace_back(xseis::Max(x));
+	return maxes;
+	// auto SumRowMax = [=](xseis::VecOfSpans<float> dat){float sum=0; for(auto&& x : dat) sum += xseis::Max(x); return sum / dat.size() * 100;};
+	// auto SumRowMax = [=](xseis::VecOfSpans<float> dat){float sum=0; for(auto&& x : dat) sum += xseis::Max(x); return sum / dat.size() * 100;};
+}
+
+template<typename T>
+T Mean (const gsl::span<T> dat)
+{	
+	T sum = 0;
+	for(auto&& x : dat) sum += x;
+	return sum / static_cast<T>(dat.size());		
+}
+
+
+Vector<Complex32> BuildPhaseShiftVec(size_t const nfreq, int const nshift) {
 
 	auto vec = Vector<Complex32>(nfreq);
 	float const fstep = 0.5f / (nfreq - 1.0f);
@@ -344,13 +363,11 @@ void XCorrChanGroupsEnvelope(Array2D<Complex32>& fdat, KeyGroups& groups, VecOfS
 					fftwf_execute_dft(plan_c2c, fptr, fptr);
 					Multiply(fbuf.span(), 1.0f / energy);
 					// Multiply(fbuf.span(), {1.0f / energy, 0.0f});
-
 					// Absolute(fbuf.data(), wlen, ccdat.row(nstack));
 					// AbsCopy(fbuf.span(), dat.span(k));
 
 					for(size_t j=0; j < fbuf.size(); ++j)
 					{
-						// csig[j] += fbuf[j][0] * fbuf[j][0] + fbuf[j][1] * fbuf[j][1];	
 						csig[j] += std::norm(fbuf[j]);	
 					} 
 					nstack++;
