@@ -57,6 +57,19 @@ Array2D<uint16_t> UniquePairs(std::vector<uint16_t>& keys)
 	return pairs;
 }
 
+VecOfSpans<uint16_t> DistFiltPairs(VecOfSpans<uint16_t> pairs, VecOfSpans<float> locs, float dmin, float dmax=999999)
+{		
+	VecOfSpans<uint16_t> pairs_filt;
+
+	for(auto&& p : pairs) 
+	{
+		float dist = DistCartesian(locs[p[0]], locs[p[1]]);
+		if (dist > dmin && dist < dmax) pairs_filt.push_back(p);		
+	}
+
+	return pairs_filt;
+}
+
 
 
 // KeyPairs UniquePairs(std::vector<uint16_t>& keys)
