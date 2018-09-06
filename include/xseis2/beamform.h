@@ -54,10 +54,12 @@ void InterLocBlocks(const VecOfSpans<float> data_cc, const VecOfSpans<uint16_t> 
 	assert((uintptr_t) data_cc[1].data() % MEM_ALIGNMENT == 0);
 	assert((uintptr_t) output.data() % MEM_ALIGNMENT == 0); 
 	assert((uintptr_t) ttable[1].data() % MEM_ALIGNMENT == 0);	
-	assert(ckeys.size() == data_cc.size());	
+	// assert(ckeys.size() == data_cc.size());
+
+	Fill(output, 0.0f);	
 
 	const uint16_t hlen = data_cc[0].size() / 2;	
-	const size_t ncc = data_cc.size();
+	const size_t ncc = ckeys.size();
 	const uint32_t ngrid = ttable[0].size();
 
 	#pragma omp parallel for
@@ -65,9 +67,7 @@ void InterLocBlocks(const VecOfSpans<float> data_cc, const VecOfSpans<uint16_t> 
 
 		float* out_ptr = &output[iblock];
 		assert((uintptr_t) out_ptr % MEM_ALIGNMENT == 0);
-
 		uint32_t blocklen = std::min(ngrid - iblock, blocksize);
-		std::fill(out_ptr, out_ptr + blocklen, 0);
 		
 		// Migrate single ccf on to grid based on tt difference
 		for (size_t i = 0; i < ncc; ++i) {				
