@@ -206,7 +206,7 @@ void Copy(T const *in, size_t npts, T *out)
 template<typename T>
 void Copy(gsl::span<T> const in, gsl::span<T> out) {
 	assert(in.size() == out.size());
-	std::copy(in.data(), in.end(), out.data());
+	std::copy(in.data(), in.data() + in.size(), out.data());
 }
 
 std::vector<float> RowMaxes (const VecOfSpans<float> dat)
@@ -225,6 +225,31 @@ T Mean (const gsl::span<T> dat)
 	T sum = 0;
 	for(auto&& x : dat) sum += x;
 	return sum / static_cast<T>(dat.size());		
+}
+
+// assume in is absolute valued
+void SlidingWinMax(const gsl::span<float> in, gsl::span<float> out, uint32_t wlen)
+{	
+	assert(wlen >= 3);
+	assert(in.size() == out.size());
+	uint32_t npts = in.size();
+
+	if (wlen % 2 == 0) wlen += 1;
+	uint32_t hlen = wlen / 2 + 1;
+
+	for(uint32_t i = 0; i < hlen; ++i) {
+		out[i] = *std::max_element(&in[0], &in[hlen]);
+	}
+
+	for(uint32_t i = npts - hlen; i < npts; ++i) {
+		out[i] = *std::max_element(&in[npts - hlen], &in[npts - 1]);
+	}
+
+	// handle non-edge case
+	for (uint32_t i = hlen; i < npts - hlen; ++i) {
+		out[i] = *std::max_element(&in[i - hlen], &in[i + hlen]);
+	}
+
 }
 
 
@@ -375,6 +400,53 @@ void XCorrChanGroupsEnvelope(Array2D<Complex32>& fdat, KeyGroups& groups, VecOfS
 			}
 			// Multiply(csig, wlen, 1.0f / static_cast<float>(nstack));		
 			Multiply(gsl::make_span(csig, wlen), 1.0f / static_cast<float>(nstack));		
+		}
+	}
+}
+
+// ccf for each sta pair = stacked envelopes of inter-channel ccfs
+void XCorrChanGroupsAbs(Array2D<Complex32>& fdat, KeyGroups& groups, VecOfSpans<uint16_t> pairs, Array2D<float>& ccdat, uint32_t wlen_smooth=0) 
+{
+	uint32_t wlen = ccdat.ncol();
+	uint32_t nfreq = fdat.ncol();
+
+	// values to roll ccfs for zero lag in middle (conv in freq domain)
+	auto vshift = BuildPhaseShiftVec(nfreq, wlen / 2);
+	float energy = Energy(fdat.span(0)) * 2;
+	std::cout << "energy: " << energy << "\n";
+
+	auto fb = Vector<Complex32>(nfreq); // only used for planning to not destroy fdat
+	auto fptr = reinterpret_cast<fftwf_complex*>(fb.data());	
+	// fftwf_plan plan_c2c = fftwf_plan_dft_1d(wlen, fptr, fptr, FFTW_BACKWARD, FFTW_PATIENCE);
+	fftwf_plan plan_inv = fftwf_plan_dft_c2r_1d(wlen, fptr, ccdat.row(0), FFTW_PATIENCE);
+
+	#pragma omp parallel
+	{
+		auto buf = Vector<float>(wlen);
+		auto fbuf = Vector<Complex32>(nfreq);
+		auto fptr = reinterpret_cast<fftwf_complex*>(fbuf.data());
+
+		#pragma omp for
+		for(size_t i = 0; i < pairs.size(); ++i) {
+			auto csig = ccdat.span(i);
+			Fill(csig, 0.0f);
+
+			uint32_t nstack = 0;
+			auto pair = pairs[i];
+			for(auto&& k0 : groups[pair[0]]) {
+				for(auto&& k1 : groups[pair[1]]) {
+					XCorr(fdat.row(k0), fdat.row(k1), fbuf.data(), fbuf.size());
+					Convolve(&vshift[0], fbuf.data(), fbuf.size());
+					fftwf_execute_dft_c2r(plan_inv, fptr, buf.data());
+					Multiply(buf.span(), 1.0f / energy);
+					for(size_t j=0; j < buf.size(); ++j) csig[j] += std::abs(buf[j]);	
+					nstack++;
+				}
+			}
+			// Multiply(csig, wlen, 1.0f / static_cast<float>(nstack));		
+			Multiply(csig, 1.0f / static_cast<float>(nstack));
+			Copy(csig, buf.span());
+			if(wlen_smooth != 0) SlidingWinMax(buf.span(), csig, wlen_smooth);
 		}
 	}
 }
