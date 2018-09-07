@@ -1,8 +1,8 @@
 #pragma once
 
 #include "xseis2/core.h"
-#include "xseis2/beamform.h"
-// #include "xseis2/signal.h"
+// #include "xseis2/beamform.h"
+#include "xseis2/signal.h"
 // #include <map>
 
 // #include "xseis/utils.h"
@@ -39,18 +39,28 @@ KeyGroups GroupChannels(std::vector<uint16_t>& keys, Vector<uint16_t>& chanmap)
 	return groups;
 }
 
-Array2D<uint16_t> UniquePairs(std::vector<uint16_t>& keys)
+// KeyGroups GroupChannels(Vector<uint16_t>& chanmap)
+KeyGroups GroupChannels(gsl::span<uint16_t> chanmap)
+{
+	size_t nkeys = Max(chanmap) + 1;
+	KeyGroups groups(nkeys);
+
+	for(size_t j = 0; j < chanmap.size(); ++j) {
+		groups[chanmap[j]].push_back(j);
+	}		
+	return groups;
+}
+
+Array2D<uint16_t> UniquePairs(gsl::span<uint16_t> keys)
 {	
-	uint32_t nsig = keys.size();
-	auto pairs = Array2D<uint16_t>(NChoose2(nsig), 2);
+	auto pairs = Array2D<uint16_t>(NChoose2(keys.size()), 2);
 	size_t row_ix = 0;
 
-	for (uint16_t i = 0; i < nsig; ++i)
-	{
-		for (uint16_t j = i + 1; j < nsig; ++j)
+	for (uint16_t i = 0; i < keys.size(); ++i) {
+		for (uint16_t j = i + 1; j < keys.size(); ++j)
 		{
-			pairs(row_ix, 0) = i;
-			pairs(row_ix, 1) = j;
+			pairs(row_ix, 0) = keys[i];
+			pairs(row_ix, 1) = keys[j];
 			row_ix += 1;
 		}
 	}

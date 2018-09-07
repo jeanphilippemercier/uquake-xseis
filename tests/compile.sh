@@ -17,3 +17,5 @@ time g++-7 $fullfile -std=c++17 -Wall -o temp -O3 -march=native -ffast-math -lhd
 # time ./main /home/phil/data/oyu/mseed_new/20180523_185101_float.mseed
 # time ./temp 
 
+# python quickplot3d.py
+

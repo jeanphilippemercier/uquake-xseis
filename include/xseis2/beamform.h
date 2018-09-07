@@ -8,44 +8,6 @@
 
 namespace xseis {
 
-inline float AngleBetweenPoints(float* a, float*b) 
-{
-	return std::atan((a[1] - b[1]) / (a[0] - b[0]));
-	// return std::atan2(a[1] - b[1], a[0] - b[0]);
-}
-
-inline float DistCartesian(float* a, float* b)
-{	
-	float dx = a[0] - b[0];
-	float dy = a[1] - b[1];
-	float dz = a[2] - b[2];
-	return std::sqrt(dx * dx + dy * dy + dz * dz);
-}
-
-inline float DistCartesian2D(float* a, float* b)
-{	
-	float dx = a[0] - b[0];
-	float dy = a[1] - b[1];
-	return std::sqrt(dx * dx + dy * dy);
-}
-
-
-inline float DistCartesian(gsl::span<float> a, gsl::span<float> b)
-{	
-	// float val = 0;
-	float v[3];
-	v[0] = a[0] - b[0];
-	v[1] = a[1] - b[1];
-	v[2] = a[2] - b[2];
-	return std::sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]);
-}
-
-
-float DistDiff(float* a, float* b, float* c) {	
-	return DistCartesian(a, c) - DistCartesian(b, c);
-}
-
-
 // Divide grid into blocks to prevent cache invalidations while writing to buffer from multiple threads
 // Requires all rows are aligned and blocksize is a multiple of alignment 
 void InterLocBlocks(const VecOfSpans<float> data_cc, const VecOfSpans<uint16_t> ckeys, const VecOfSpans<uint16_t> ttable, gsl::span<float> output, uint32_t blocksize=1024 * 8, float scale_pwr=1.0)

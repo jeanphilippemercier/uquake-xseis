@@ -97,7 +97,7 @@ public:
 
 	Array2D() :data_(nullptr), nrow_(0), ncol_(0), ncol_pad_(0), owns_(false) {}
 
-	// // init from existing c-array
+	// // init from existing c-vspanay
 	// Array2D(ValueType *data, IndexType nrow, IndexType ncol, IndexType npad=0)
 	// : data_(data), nrow_(nrow), ncol_(ncol), ncol_pad_(ncol - npad), owns_(false)
 	// {
@@ -268,13 +268,13 @@ std::ostream &operator <<(std::ostream &os, const std::vector<T> &v) {
 }
 
 template<typename T>
-std::ostream &operator <<(std::ostream &os, xseis::Array2D<T> &arr) {
+std::ostream &operator <<(std::ostream &os, xseis::VecOfSpans<T> &vspan) {
 
-	os << "Array2D (" << arr.nrow() << "x" << arr.ncol() <<")" << "\n";
+	os << "std::vector of gsl::spans (" << vspan.size() << "x" << vspan[0].size() <<")" << "\n";
 
-	if (arr.size() < 1000000)
+	if (vspan.size() < 1000000)
 	{
-		for(auto&& v : arr.rows()) {os << v << "\n";}
+		for(auto&& v : vspan) {os << v << "\n";}
 	}
 	// std::copy(v.begin(), v.end(), std::ostream_iterator<T>(os, " "));
 	return os;
