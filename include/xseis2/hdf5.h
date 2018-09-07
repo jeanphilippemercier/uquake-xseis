@@ -48,8 +48,25 @@ public:
 
 		assert(col_offset < ncol_);
 		size_t ncol = ncol_ - col_offset;
-
 		auto arr = Array2D<T>(nrow_, ncol);
+
+		std::vector<size_t> row_keys(nrow_);
+		std::iota(std::begin(row_keys), std::end(row_keys), 0);
+
+		LoadRows(arr, row_keys, col_offset);
+
+		return arr;
+	}
+
+	template <typename T>	
+	Array2D<T> LoadArrayCols(std::vector<size_t> col_range = {0, 0}) {
+
+		size_t col_offset = col_range[0];
+		assert(col_offset < ncol_);
+
+		if (col_range[1] == 0) col_range[1] = ncol_;
+		// size_t ncol = ncol_ - col_offset;
+		auto arr = Array2D<T>(nrow_, col_range[1] - col_range[0]);
 
 		std::vector<size_t> row_keys(nrow_);
 		std::iota(std::begin(row_keys), std::end(row_keys), 0);
