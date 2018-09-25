@@ -353,15 +353,15 @@ void ApplyFreqFilterReplace(const gsl::span<float> filter, gsl::span<Complex32> 
 }
 
 
-Array2D<Complex32> WhitenAndFFT(Array2D<float>& dat, float sr, std::vector<float> cfreqs) 
+Array2D<Complex32> WhitenAndFFT(Array2D<float>& dat, float const sr, std::vector<float> cfreqs, float taper_len=0.02) 
 {
 	size_t nchan = dat.nrow();
 	size_t wlen = dat.ncol();
+	uint32_t taper_nsamp = taper_len * wlen;
+
 	size_t nfreq = wlen / 2 + 1;
-	uint32_t taper_nsamp = 100;
 
 	auto fdat = Array2D<Complex32>(nchan, nfreq);
-
 	auto filter = BuildFreqFilter(cfreqs, nfreq, sr);
 	// float energy = Energy(filter.span()) * 2;
 
@@ -380,6 +380,48 @@ Array2D<Complex32> WhitenAndFFT(Array2D<float>& dat, float sr, std::vector<float
 		Multiply(dat.span(i), 1.0f / static_cast<float>(wlen));
 		fftwf_execute_dft_r2c(plan_fwd, dat.row(i), fptr);
 	}
+
+	return fdat;
+}
+
+
+Array2D<Complex32> WhitenAndFFTPadDec2x(Array2D<float>& dat, float& sr, std::vector<float> cfreqs, float taper_len=0.02) 
+{
+
+	size_t nchan = dat.nrow();
+	size_t wlen = dat.ncol();
+	size_t nfreq = wlen / 2 + 1;
+	uint32_t taper_nsamp = taper_len * wlen;
+
+	// size_t wlen_pad = wlen * 2;
+	// size_t nfreq_pad = wlen_pad / 2 + 1;
+
+	auto fdat = Array2D<Complex32>(nchan, nfreq);
+	auto filter = BuildFreqFilter(cfreqs, nfreq, sr);
+	// float energy = Energy(filter.span()) * 2;
+
+	auto buf = Vector<float>(wlen);
+
+	// auto fbuf = Vector<Complex32>(wlen);
+	auto fptr = reinterpret_cast<fftwf_complex*>(fdat.row(0));	
+	fftwf_plan plan_fwd = fftwf_plan_dft_r2c_1d(wlen, buf.data(), fptr, FFTW_PATIENCE);
+	fftwf_plan plan_inv = fftwf_plan_dft_c2r_1d(wlen, fptr, buf.data(), FFTW_PATIENCE);
+	
+	#pragma omp parallel for
+	for(size_t i = 0; i < dat.nrow(); ++i) {
+		auto fptr = reinterpret_cast<fftwf_complex*>(fdat.row(i));
+		auto sig = dat.span(i);
+		fftwf_execute_dft_r2c(plan_fwd, sig.data(), fptr);
+		ApplyFreqFilterReplace(filter.span(), fdat.span(i)); // apply whiten
+		fftwf_execute_dft_c2r(plan_inv, fptr, sig.data());
+		TaperCosine(sig, taper_nsamp);
+		Multiply(sig, 1.0f / static_cast<float>(wlen));		
+		for(size_t j = 0; j < wlen / 2; ++j) sig[j] = sig[j * 2];
+		for(size_t j = wlen / 2; j < wlen; ++j) sig[j] = 0;
+
+		fftwf_execute_dft_r2c(plan_fwd, sig.data(), fptr);
+	}
+	sr /= 2;
 
 	return fdat;
 }

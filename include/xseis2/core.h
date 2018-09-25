@@ -1,4 +1,6 @@
 #pragma once
+// #ifndef CORE_H
+// #define CORE_H 
 
 #include <iomanip>
 #include <iostream>
@@ -279,4 +281,6 @@ std::ostream &operator <<(std::ostream &os, xseis::VecOfSpans<T> &vspan) {
 	// std::copy(v.begin(), v.end(), std::ostream_iterator<T>(os, " "));
 	return os;
 }
+
+// #endif
 
