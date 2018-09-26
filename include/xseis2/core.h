@@ -257,7 +257,7 @@ std::vector<T> Arange(T start, T stop, T step = 1) {
 
 
 template<typename T>
-std::ostream &operator <<(std::ostream &os, const gsl::span<T> &v) {
+std::ostream &operator <<(std::ostream &os, const gsl::span<T> v) {
 	os << "[ " ;
 	for (auto&& x : v) os << std::left << std::setw(10) << x;
 	return os << " ]";
@@ -270,14 +270,13 @@ std::ostream &operator <<(std::ostream &os, const std::vector<T> &v) {
 }
 
 template<typename T>
-std::ostream &operator <<(std::ostream &os, xseis::VecOfSpans<T> &vspan) {
+std::ostream &operator <<(std::ostream &os, xseis::VecOfSpans<T> vspan) {
 
-	os << "std::vector of gsl::spans (" << vspan.size() << "x" << vspan[0].size() <<")" << "\n";
-
-	if (vspan.size() < 1000000)
+	if (vspan.size() < 100000)
 	{
 		for(auto&& v : vspan) {os << v << "\n";}
 	}
+	os << "std::vector of gsl::spans (" << vspan.size() << "x" << vspan[0].size() <<")" << "\n";
 	// std::copy(v.begin(), v.end(), std::ostream_iterator<T>(os, " "));
 	return os;
 }
