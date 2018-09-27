@@ -56,7 +56,7 @@ public:
 	pointer data_;
 	bool owns_; // data ownership
 
-	Vector() :data_(nullptr), size_(0), owns_(false) {}
+	Vector() :data_(nullptr), size_(0), owns_(true) {}
 
 	// init from existing c-array
 	Vector(ValueType *data, IndexType size) : data_(data), size_(size), owns_(false) {}
@@ -97,16 +97,32 @@ public:
 	pointer data_;
 	bool owns_; // data ownership
 
-	Array2D() :data_(nullptr), nrow_(0), ncol_(0), ncol_pad_(0), owns_(false) {}
+	Array2D() :data_(nullptr), nrow_(0), ncol_(0), ncol_pad_(0), owns_(true) {}
 
-	// // init from existing c-vspanay
-	// Array2D(ValueType *data, IndexType nrow, IndexType ncol, IndexType npad=0)
-	// : data_(data), nrow_(nrow), ncol_(ncol), ncol_pad_(ncol - npad), owns_(false)
-	// {
-	// 	assert(ncol > npad);
-	// }
-
-	// init and allocate dynamic memory
+	// init from existing c-array, copies data only if padding enabled
+	Array2D(ValueType *data, IndexType nrow, IndexType ncol, bool pad)
+	: nrow_(nrow), ncol_(ncol)
+	{
+		if (pad == true)
+		{
+			ncol_pad_ = PadToBytes<ValueType>(ncol, alignment_);
+			data_ = MallocAligned<ValueType>(nrow_ * ncol_pad_, alignment_);
+			owns_ = true;
+			for(size_t i = 0; i < nrow_; ++i) {
+				pointer in = data + i * ncol_;
+				pointer out = data_ + i * ncol_pad_;
+				std::copy(in, in + ncol_, out);
+			}
+		}
+		else
+		{
+			data_ = data;
+			ncol_pad_ = ncol;
+			owns_ = false;
+		}
+	}
+	
+	// init and allocate dynamic memory, padded to align each row ptr
 	Array2D(IndexType nrow, IndexType ncol): nrow_(nrow), ncol_(ncol), owns_(true)
 	{
 		ncol_pad_ = PadToBytes<ValueType>(ncol, alignment_);

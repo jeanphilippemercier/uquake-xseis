@@ -15,7 +15,7 @@ void InterLocBlocks(const VecOfSpans<float> data_cc, const VecOfSpans<uint16_t> 
 	// note asserts incorrectly pass when called through cython with python owned memory
 	assert((uintptr_t) data_cc[1].data() % MEM_ALIGNMENT == 0);
 	assert((uintptr_t) output.data() % MEM_ALIGNMENT == 0); 
-	assert((uintptr_t) ttable[1].data() % MEM_ALIGNMENT == 0);	
+	// assert((uintptr_t) ttable[1].data() % MEM_ALIGNMENT == 0);	
 	// assert(ckeys.size() == data_cc.size());
 
 	Fill(output, 0.0f);	
@@ -38,7 +38,8 @@ void InterLocBlocks(const VecOfSpans<float> data_cc, const VecOfSpans<uint16_t> 
 			uint16_t* tts_sta2 = ttable[ckeys[i][1]].data() + iblock;	
 			float* cc_ptr = data_cc[i].data();
 
-			#pragma omp simd aligned(tts_sta1, tts_sta2, out_ptr, cc_ptr: MEM_ALIGNMENT)
+			// #pragma omp simd aligned(tts_sta1, tts_sta2, out_ptr, cc_ptr: MEM_ALIGNMENT)
+			#pragma omp simd aligned(out_ptr, cc_ptr: MEM_ALIGNMENT)
 			for (size_t j = 0; j < blocklen; ++j) {
 				out_ptr[j] += cc_ptr[hlen + tts_sta2[j] - tts_sta1[j]];
 			}
@@ -52,55 +53,55 @@ void InterLocBlocks(const VecOfSpans<float> data_cc, const VecOfSpans<uint16_t> 
 
 
 
-void InterLocBlocks2(Array2D<float>& data_cc, Array2D<uint16_t>& ckeys, Array2D<uint16_t>& ttable, Vector<float>& output, uint32_t blocksize=1024 * 8, float scale_pwr=100)
-{
-	// Divide grid into chunks to prevent cache invalidations during writing (see Ben Baker migrate)
-	// This uses less memory but was a bit slower atleast in my typical grid/ccfs sizes
-	// UPdate: When grid sizes >> nccfs and using more than 15 cores faster than InterLoc above
+// void InterLocBlocks2(Array2D<float>& data_cc, Array2D<uint16_t>& ckeys, Array2D<uint16_t>& ttable, Vector<float>& output, uint32_t blocksize=1024 * 8, float scale_pwr=100)
+// {
+// 	// Divide grid into chunks to prevent cache invalidations during writing (see Ben Baker migrate)
+// 	// This uses less memory but was a bit slower atleast in my typical grid/ccfs sizes
+// 	// UPdate: When grid sizes >> nccfs and using more than 15 cores faster than InterLoc above
 
-	// note these asserts dont work when called through cython (python owned memory)
-	assert((uintptr_t) data_cc.row(1) % MEM_ALIGNMENT == 0);
-	assert((uintptr_t) output.data() % MEM_ALIGNMENT == 0); 
-	// assert((uintptr_t) ttable.row(1) % MEM_ALIGNMENT == 0);	
+// 	// note these asserts dont work when called through cython (python owned memory)
+// 	assert((uintptr_t) data_cc.row(1) % MEM_ALIGNMENT == 0);
+// 	assert((uintptr_t) output.data() % MEM_ALIGNMENT == 0); 
+// 	// assert((uintptr_t) ttable.row(1) % MEM_ALIGNMENT == 0);	
 
-	// const size_t cclen = data_cc.ncol();
-	const uint16_t hlen = data_cc.ncol() / 2;	
-	const size_t ncc = data_cc.nrow();
-	const uint32_t ngrid = ttable.ncol();
-	uint32_t blocklen;
+// 	// const size_t cclen = data_cc.ncol();
+// 	const uint16_t hlen = data_cc.ncol() / 2;	
+// 	const size_t ncc = data_cc.nrow();
+// 	const uint32_t ngrid = ttable.ncol();
+// 	uint32_t blocklen;
 
-	uint16_t *tts_sta1, *tts_sta2;
-	float *cc_ptr = nullptr;
-	float *out_ptr = nullptr;
+// 	uint16_t *tts_sta1, *tts_sta2;
+// 	float *cc_ptr = nullptr;
+// 	float *out_ptr = nullptr;
 
-	// printf("blocksize %lu, ngrid %lu \n", blocksize, ngrid);
+// 	// printf("blocksize %lu, ngrid %lu \n", blocksize, ngrid);
 
-	#pragma omp parallel for private(tts_sta1, tts_sta2, cc_ptr, out_ptr, blocklen)
-	for(uint32_t iblock = 0; iblock < ngrid; iblock += blocksize) {
+// 	#pragma omp parallel for private(tts_sta1, tts_sta2, cc_ptr, out_ptr, blocklen)
+// 	for(uint32_t iblock = 0; iblock < ngrid; iblock += blocksize) {
 
-		blocklen = std::min(ngrid - iblock, blocksize);
-		out_ptr = output.data_ + iblock;
-		std::fill(out_ptr, out_ptr + blocklen, 0);
+// 		blocklen = std::min(ngrid - iblock, blocksize);
+// 		out_ptr = output.data_ + iblock;
+// 		std::fill(out_ptr, out_ptr + blocklen, 0);
 		
-		for (size_t i = 0; i < ncc; ++i) {				
+// 		for (size_t i = 0; i < ncc; ++i) {				
 
-			tts_sta1 = ttable.row(ckeys(i, 0)) + iblock;	
-			tts_sta2 = ttable.row(ckeys(i, 1)) + iblock;
-			cc_ptr = data_cc.row(i);
+// 			tts_sta1 = ttable.row(ckeys(i, 0)) + iblock;	
+// 			tts_sta2 = ttable.row(ckeys(i, 1)) + iblock;
+// 			cc_ptr = data_cc.row(i);
 
-			// Migrate single ccf on to grid based on tt difference
-			// #pragma omp simd aligned(tts_sta1, tts_sta2, out_ptr, cc_ptr: MEM_ALIGNMENT)
-			#pragma omp simd aligned(out_ptr, cc_ptr: MEM_ALIGNMENT)			
-			for (size_t j = 0; j < blocklen; ++j) {
-				out_ptr[j] += cc_ptr[hlen + tts_sta2[j] - tts_sta1[j]];
-			}
-		}
-	}
+// 			// Migrate single ccf on to grid based on tt difference
+// 			// #pragma omp simd aligned(tts_sta1, tts_sta2, out_ptr, cc_ptr: MEM_ALIGNMENT)
+// 			#pragma omp simd aligned(out_ptr, cc_ptr: MEM_ALIGNMENT)			
+// 			for (size_t j = 0; j < blocklen; ++j) {
+// 				out_ptr[j] += cc_ptr[hlen + tts_sta2[j] - tts_sta1[j]];
+// 			}
+// 		}
+// 	}
 
-	Multiply(output.span(), scale_pwr / static_cast<float>(ncc));
-	// float norm = scale_pwr / static_cast<float>(ncc);
-	// for(size_t i = 0; i < output.size_; ++i) output[i] *= norm;
-}
+// 	Multiply(output.span(), scale_pwr / static_cast<float>(ncc));
+// 	// float norm = scale_pwr / static_cast<float>(ncc);
+// 	// for(size_t i = 0; i < output.size_; ++i) output[i] *= norm;
+// }
 
 
 
