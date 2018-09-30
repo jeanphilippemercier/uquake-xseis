@@ -54,6 +54,7 @@ float DistDiff(float* a, float* b, float* c) {
 template<typename T>
 void Roll(gsl::span<T> sig, long nroll)
 {
+	assert(nroll < sig.size());
 	std::rotate(sig.begin(), sig.begin() + nroll, sig.end());
 }
 
@@ -99,6 +100,14 @@ inline void Accumulate(float const* const data, float* const stack,
 		stack[i] += data[i];
 	}
 }
+
+#pragma omp declare simd aligned(sig:MEM_ALIGNMENT)
+void Whiten(Complex32* const sig, uint32_t const npts)
+{		
+	#pragma omp simd aligned(sig:MEM_ALIGNMENT)
+	for(uint32_t i = 0; i < npts; ++i) sig[i] /= std::abs(sig[i]);		
+}
+
 
 // #pragma omp declare simd aligned(sig:MEM_ALIGNMENT)
 // void Absolute(float* sig, uint32_t const npts)
@@ -494,7 +503,7 @@ void XCorrChanGroupsAbs(Array2D<Complex32>& fdat, KeyGroups& groups, VecOfSpans<
 	// values to roll ccfs for zero lag in middle (conv in freq domain)
 	auto vshift = BuildPhaseShiftVec(nfreq, wlen / 2);
 	float energy = Energy(fdat.span(0)) * 2;
-	std::cout << "energy: " << energy << "\n";
+	// std::cout << "energy: " << energy << "\n";
 
 	auto fb = Vector<Complex32>(nfreq); // only used for planning to not destroy fdat
 	auto fptr = reinterpret_cast<fftwf_complex*>(fb.data());	
@@ -537,9 +546,23 @@ void XCorrChanGroupsAbs(Array2D<Complex32>& fdat, KeyGroups& groups, VecOfSpans<
 
 void RollSigs(VecOfSpans<float> signals, const KeyGroups& groups, gsl::span<uint16_t> const shifts) 
 {	
+
 	for(size_t i = 0; i < groups.size(); ++i) {
 		int rollby = static_cast<int>(shifts[i]);
 		for(auto& key : groups[i]) Roll(signals[key], rollby);			
+	}
+}
+
+void RollSigsHack(VecOfSpans<float> signals, const KeyGroups& groups, gsl::span<uint16_t> const shifts) 
+{	
+	auto min = Min(shifts);
+	for(auto& x : shifts) x -= min;
+		
+	uint32_t nsamp = signals[0].size();
+
+	for(size_t i = 0; i < groups.size(); ++i) {
+		int rollby = static_cast<int>(shifts[i]);
+		if (rollby < nsamp) for(auto& key : groups[i]) Roll(signals[key], rollby);
 	}
 }
 
@@ -556,7 +579,7 @@ Vector<float> StackSigs(VecOfSpans<float> const signals)
 void Envelope(VecOfSpans<float> signals) 
 {
 	uint32_t wlen = signals[0].size();
-	uint32_t nfreq_r2c = wlen / 2 + 1;
+	// uint32_t nfreq_r2c = wlen / 2 + 1;
 
 	auto buf = Vector<float>(wlen);
 	auto fbuf = Vector<Complex32>(wlen);
@@ -576,6 +599,33 @@ void Envelope(VecOfSpans<float> signals)
 		AbsCopy(fbuf.span(), sig);		
 	}
 }
+
+
+float MADMax(gsl::span<float> power, uint32_t scale=1) {
+	// destroys input
+	size_t npts = power.size();
+	auto ptr = power.data();
+
+	uint32_t amax = ArgMax(power);
+	float vmax = power[amax];
+
+	size_t half = npts / 2;
+	std::nth_element(ptr, ptr + half, ptr + npts);
+	float med = ptr[half];
+	// float mean = process::mean(ptr, npts);
+
+	for(size_t i = 0; i < npts; ++i) {
+		ptr[i] = std::abs(ptr[i] - med);
+	}
+
+	std::nth_element(ptr, ptr + half, ptr + npts);
+	float mad = ptr[half];
+	// float mdev = (vmax - med) / mad;
+	// uint32_t mdev = static_cast<uint32_t>((vmax - med) / mad * scale) ;
+	float mdev = (vmax - med) / mad * scale;	
+	return mdev;
+}
+
 
 }
 

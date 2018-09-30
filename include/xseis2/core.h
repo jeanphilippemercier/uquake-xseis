@@ -62,7 +62,7 @@ public:
 	Vector(ValueType *data, IndexType size) : data_(data), size_(size), owns_(false) {}
 
 	// init and allocate dynamic memory
-	Vector(IndexType size): size_(size)
+	Vector(IndexType size): size_(size), owns_(true)
 	{		
 		data_ = MallocAligned<ValueType>(size_, alignment_);
 	}
