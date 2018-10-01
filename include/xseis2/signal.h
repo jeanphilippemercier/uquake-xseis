@@ -362,13 +362,26 @@ void ApplyFreqFilterReplace(const gsl::span<float> filter, gsl::span<Complex32> 
 }
 
 
-Array2D<Complex32> WhitenAndFFT(Array2D<float>& dat, float const sr, std::vector<float> cfreqs, float taper_len=0.02) 
+Array2D<float> ZeroPad(Array2D<float>& dat, size_t npad) 
 {
-	size_t nchan = dat.nrow();
-	size_t wlen = dat.ncol();
-	uint32_t taper_nsamp = taper_len * wlen;
+	auto out = xseis::Array2D<float>(dat.nrow(), npad);
 
-	size_t nfreq = wlen / 2 + 1;
+	for(size_t i = 0; i < dat.nrow(); ++i) {
+		xseis::Fill(out.span(i), 0.0f);
+		xseis::Copy(dat.row(i), dat.ncol(), out.row(i));
+	}
+
+	return out;
+}
+
+
+
+Array2D<Complex32> WhitenAndFFT(Array2D<float>& dat, float const sr, std::vector<float> cfreqs, float const taper_len=0.02) 
+{
+	size_t const nchan = dat.nrow();
+	size_t const wlen = dat.ncol();
+	uint32_t const taper_nsamp = taper_len * wlen;
+	size_t const nfreq = wlen / 2 + 1;
 
 	auto fdat = Array2D<Complex32>(nchan, nfreq);
 	auto filter = BuildFreqFilter(cfreqs, nfreq, sr);

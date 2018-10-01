@@ -6,18 +6,17 @@ from libcpp cimport bool
 from libcpp.string cimport string
 from libc.stdint cimport uint16_t, uint32_t, int64_t
 
-
 cdef extern from "xseis2/workflows.h" namespace "xseis":
 
-	void SearchWinDec2X(float* rawdat_p, uint32_t nchan, uint32_t npts, float sr, float* stalocs_p, uint32_t nsta, uint16_t* chanmap_p, uint16_t* ttable_ptr, uint32_t ngrid, uint32_t* outbuf, uint32_t nthreads, string& file_out, int debug) 
+	void SearchOnePhase(float* rawdat_p, uint32_t nchan, uint32_t npts, float sr, float* stalocs_p, uint32_t nsta, uint16_t* chanmap_p, uint16_t* ttable_ptr, uint32_t ngrid, int64_t* outbuf, uint32_t nthreads, string& file_out, int debug) 
 
 
-def fSearchWinDec2X(np.ndarray[np.float32_t, ndim=2] data,
+def pySearchOnePhase(np.ndarray[np.float32_t, ndim=2] data,
 					sr,
 					np.ndarray[np.float32_t, ndim=2] stalocs,
 					np.ndarray[np.uint16_t, ndim=1] chanmap,
 					np.ndarray[np.uint16_t, ndim=2] ttable,					
-					np.ndarray[np.uint32_t, ndim=1] outbuf,					
+					np.ndarray[np.int64_t, ndim=1] outbuf,					
 					nthreads,
 					outfile,
 					debug
@@ -34,7 +33,7 @@ def fSearchWinDec2X(np.ndarray[np.float32_t, ndim=2] data,
 	# print(ttable1.shape)
 	# print(ttable2.shape)
 	# print(ngrid)
-	return SearchWinDec2X(&data[0, 0], data.shape[0], data.shape[1],
+	return SearchOnePhase(&data[0, 0], data.shape[0], data.shape[1],
 					sr,
 					&stalocs[0, 0], stalocs.shape[0],
 					&chanmap[0],					
@@ -44,6 +43,48 @@ def fSearchWinDec2X(np.ndarray[np.float32_t, ndim=2] data,
 					outfile_str,
 					debug
 					)
+
+
+
+
+
+# cdef extern from "xseis2/workflows.h" namespace "xseis":
+
+# 	void SearchWinDec2X(float* rawdat_p, uint32_t nchan, uint32_t npts, float sr, float* stalocs_p, uint32_t nsta, uint16_t* chanmap_p, uint16_t* ttable_ptr, uint32_t ngrid, uint32_t* outbuf, uint32_t nthreads, string& file_out, int debug) 
+
+
+# def fSearchWinDec2X(np.ndarray[np.float32_t, ndim=2] data,
+# 					sr,
+# 					np.ndarray[np.float32_t, ndim=2] stalocs,
+# 					np.ndarray[np.uint16_t, ndim=1] chanmap,
+# 					np.ndarray[np.uint16_t, ndim=2] ttable,					
+# 					np.ndarray[np.uint32_t, ndim=1] outbuf,					
+# 					nthreads,
+# 					outfile,
+# 					debug
+# 			   ):
+# 	assert(data.shape[0] == chanmap.shape[0])
+# 	assert(ttable.shape[0] == stalocs.shape[0])
+# 	# assert(ttable.shape[1] == output.shape[0])
+# 	# assert(ttable.shape[0] == ttable2.shape[0])
+# 	# assert(ttable.shape[1] == ttable2.shape[1])
+
+# 	cdef string outfile_str = outfile.encode('UTF-8')
+
+# 	# ngrid = ttable1.shape[1]
+# 	# print(ttable1.shape)
+# 	# print(ttable2.shape)
+# 	# print(ngrid)
+# 	return SearchWinDec2X(&data[0, 0], data.shape[0], data.shape[1],
+# 					sr,
+# 					&stalocs[0, 0], stalocs.shape[0],
+# 					&chanmap[0],					
+# 					&ttable[0, 0], ttable.shape[1],
+# 					&outbuf[0],
+# 					nthreads,
+# 					outfile_str,
+# 					debug
+# 					)
 
 
 
