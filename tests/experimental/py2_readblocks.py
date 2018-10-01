@@ -16,15 +16,16 @@ sr = hf.attrs['samplerate']
 stalocs = hf['sta_locs'][:]
 chanmap = hf['chan_map'][:]
 src_loc = hf['src_loc'][:]
-ot_true = np.argmax(np.abs(src_time))
+# ot_true = np.argmax(np.abs(src_time))
 rdat = hf['data'][:]
 hf.close()
 
 with np.load(ddir + "output_new.npz", mmap_mode='r') as npz:
 	print(npz.files)
-	iblocks = npz['iblocks']
+	iblocks = npz['iblocks'].astype(int)
 	bdat = npz['bdat']
 	bdat2 = npz['bdat2']
+	dwins = npz['wblocks'].astype(int)
 
 	# dat = npz['sigs_preproc']
 	# ckeys = npz['sta_ckeys']
@@ -37,17 +38,34 @@ with np.load(ddir + "output_new.npz", mmap_mode='r') as npz:
 	# droll = npz['sigs_rolled']
 	# stack = npz['sig_stack']
 
-wlen = 0.05 * dsr
+wlen = int(0.05 * sr)
 nchan, npts = rdat.shape
-wins = np.arange(0, npts, wlen)
-
+# wins = np.arange(0, npts, wlen)
+# wins = iblocks[dwins]
+wins = dwins * wlen
 print(np.allclose(bdat, bdat2))
 
-xplot.sigs(bdat2[::10])
+picks = (dwins * wlen)[chanmap]
+fig = plt.figure(figsize=(11, 8))
+ax = fig.add_subplot(111)
+shifts = np.arange(0, picks.shape[0], 1) * 1.2
+xplot.sigs(d, shifts, color='black', alpha=0.5, zorder=0)
+# plt.axvline(ot, linestyle='--', color='red')
+ax.scatter(picks, shifts, color='red', s=30, marker='|', zorder=1, label='homo')
+
+
+
+xplot.sigs(bdat[::10])
 [plt.axvline(x, linestyle='--', color='red', alpha=0.5) for x in wins]
 
 
-dsr = sr
+sig = bdat2[0]
+plt.plot(sig)
+
+xplot.freq(sig[:wlen], sr)
+
+
+
 # dec = 4
 # dsr = sr / dec
 # xutil.bandpass(rdat, [80, dsr / 2], sr)

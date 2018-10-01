@@ -13,9 +13,9 @@ namespace xseis {
 void InterLocBlocks(const VecOfSpans<float> data_cc, const VecOfSpans<uint16_t> ckeys, const VecOfSpans<uint16_t> ttable, gsl::span<float> output, uint32_t blocksize=1024 * 8, float scale_pwr=1.0)
 {	
 	// note asserts incorrectly pass when called through cython with python owned memory
-	assert((uintptr_t) data_cc[1].data() % MEM_ALIGNMENT == 0);
-	assert((uintptr_t) output.data() % MEM_ALIGNMENT == 0); 
-	// assert((uintptr_t) ttable[1].data() % MEM_ALIGNMENT == 0);	
+	assert((uintptr_t) data_cc[1].data() % MIN_ALIGN == 0);
+	assert((uintptr_t) output.data() % MIN_ALIGN == 0); 
+	assert((uintptr_t) ttable[1].data() % MIN_ALIGN == 0);	
 	// assert(ckeys.size() == data_cc.size());
 
 	Fill(output, 0.0f);	
@@ -28,7 +28,7 @@ void InterLocBlocks(const VecOfSpans<float> data_cc, const VecOfSpans<uint16_t> 
 	for(uint32_t iblock = 0; iblock < ngrid; iblock += blocksize) {
 
 		float* out_ptr = &output[iblock];
-		assert((uintptr_t) out_ptr % MEM_ALIGNMENT == 0);
+		assert((uintptr_t) out_ptr % MIN_ALIGN == 0);
 		uint32_t blocklen = std::min(ngrid - iblock, blocksize);
 		
 		// Migrate single ccf on to grid based on tt difference
@@ -38,8 +38,8 @@ void InterLocBlocks(const VecOfSpans<float> data_cc, const VecOfSpans<uint16_t> 
 			uint16_t* tts_sta2 = ttable[ckeys[i][1]].data() + iblock;	
 			float* cc_ptr = data_cc[i].data();
 
-			// #pragma omp simd aligned(tts_sta1, tts_sta2, out_ptr, cc_ptr: MEM_ALIGNMENT)
-			#pragma omp simd aligned(out_ptr, cc_ptr: MEM_ALIGNMENT)
+			// #pragma omp simd aligned(tts_sta1, tts_sta2, out_ptr, cc_ptr: MIN_ALIGN)
+			#pragma omp simd aligned(out_ptr, cc_ptr: MIN_ALIGN)
 			for (size_t j = 0; j < blocklen; ++j) {
 				out_ptr[j] += cc_ptr[hlen + tts_sta2[j] - tts_sta1[j]];
 			}
@@ -60,9 +60,9 @@ void InterLocBlocks(const VecOfSpans<float> data_cc, const VecOfSpans<uint16_t> 
 // 	// UPdate: When grid sizes >> nccfs and using more than 15 cores faster than InterLoc above
 
 // 	// note these asserts dont work when called through cython (python owned memory)
-// 	assert((uintptr_t) data_cc.row(1) % MEM_ALIGNMENT == 0);
-// 	assert((uintptr_t) output.data() % MEM_ALIGNMENT == 0); 
-// 	// assert((uintptr_t) ttable.row(1) % MEM_ALIGNMENT == 0);	
+// 	assert((uintptr_t) data_cc.row(1) % MIN_ALIGN == 0);
+// 	assert((uintptr_t) output.data() % MIN_ALIGN == 0); 
+// 	// assert((uintptr_t) ttable.row(1) % MIN_ALIGN == 0);	
 
 // 	// const size_t cclen = data_cc.ncol();
 // 	const uint16_t hlen = data_cc.ncol() / 2;	
@@ -90,8 +90,8 @@ void InterLocBlocks(const VecOfSpans<float> data_cc, const VecOfSpans<uint16_t> 
 // 			cc_ptr = data_cc.row(i);
 
 // 			// Migrate single ccf on to grid based on tt difference
-// 			// #pragma omp simd aligned(tts_sta1, tts_sta2, out_ptr, cc_ptr: MEM_ALIGNMENT)
-// 			#pragma omp simd aligned(out_ptr, cc_ptr: MEM_ALIGNMENT)			
+// 			// #pragma omp simd aligned(tts_sta1, tts_sta2, out_ptr, cc_ptr: MIN_ALIGN)
+// 			#pragma omp simd aligned(out_ptr, cc_ptr: MIN_ALIGN)			
 // 			for (size_t j = 0; j < blocklen; ++j) {
 // 				out_ptr[j] += cc_ptr[hlen + tts_sta2[j] - tts_sta1[j]];
 // 			}

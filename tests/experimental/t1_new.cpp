@@ -50,14 +50,15 @@ int main(int argc, char const *argv[])
 	uint32_t fix_min = freq_win[0] * fsr + 0.5;
 	uint32_t fix_max = freq_win[1] * fsr + 0.5;
 	uint32_t flen = fix_max - fix_min;
-	uint32_t flen_pad = xseis::PadToBytes<xseis::Complex32>(flen, xseis::MEM_ALIGNMENT);
+	uint32_t flen_pad = xseis::PadToBytes<xseis::Complex32>(flen, xseis::CACHE_LINE);
 
 	std::cout << "flen: " << flen << "\n";
 	std::cout << "flen_pad: " << flen_pad << "\n";
 	std::cout << "wlen: " << wlen << "\n";
+	std::cout << "fix_min: " << fix_min << "\n";
 
 	// uint32_t blockstep = xseis::PadToBytes<float>(wlen / 2, xseis::MEM_ALIGNMENT);
-	uint32_t blockstep = wlen / 2;
+	uint16_t blockstep = wlen / 2;
 	auto iblocks = xseis::Arange<uint32_t>(0, dat.ncol(), blockstep);
 	xseis::NpzSave(file_out, "iblocks", gsl::make_span(iblocks), "w");
 
@@ -118,35 +119,87 @@ int main(int argc, char const *argv[])
 	}
 
 	logger.log("prepare blocks");
-
 	xseis::NpzSave(file_out, "bdat2", bdat.rows(), "a");
 
+	// Pairs ///////////////////////////////////////////////////////////////////
+	// group similar channels and create cc pairs
+	auto keys = xseis::Arange<uint16_t>(0, stalocs.nrow());
+	auto groups = xseis::GroupChannels(chanmap.span());
+	auto pairs_all = xseis::UniquePairs(keys);
+	auto pairs = pairs_all.rows();
+	// auto pairs = xseis::DistFiltPairs(pairs_all.rows(), stalocs.rows(), 300, 1500);
+	xseis::NpzSave(file_out, "sta_ckeys", pairs_all.rows(), "a");
+	std::cout << "npairs: " << pairs.size() << '\n';
+	logger.log("keygen");
 
-	// auto fdat = xseis::WhitenAndFFT(dat, sr, {30, 60, 350, 400});
-	// logger.log("fft");
-	// xseis::NpzSave(file_out, "sigs_preproc", dat.rows(), "w");
-	// logger.log("save dat");
+	// Grid ///////////////////////////////////////////////////////////////////
+	// src_loc = 1600, 1400, 1000
+	auto grid = xseis::Grid({500, 2000, 500, 1900, 200, 1500, 25});
+	auto points = grid.points();
+	xseis::NpzSave(file_out, "grid_points", points.rows(), "a");
+	xseis::NpzSave(file_out, "grid_lims", grid.lims(), "a");
+	logger.log("build points");
 
+	float vel = 5000;
+	// float vel = 3000;
+	auto ttable = xseis::Array2D<uint16_t>(points.nrow(), stalocs.nrow());
+	// xseis::FillTravelTimeTable(stalocs, points, vel, sr, ttable);
+	xseis::FillTravelTimeTable(points, stalocs, vel, sr, ttable);
+	logger.log("Fill ttable");
+	// xseis::NpzSave(file_out, "ttable", ttable.rows(), "a");
 
-	// // Correlate ///////////////////////////////////////////////////////////////////
-	// // group similar channels and create cc pairs
-	// auto keys = xseis::Arange<uint16_t>(0, stalocs.nrow());
-	// // auto groups = xseis::GroupChannels(keys, chanmap);
-	// auto groups = xseis::GroupChannels(chanmap.span());
+	uint32_t ngrid = ttable.nrow();
+	uint32_t nsta = ttable.ncol();
+	uint32_t nchan = fbdat.nrow();
+	// std::vector<uint16_t*> dptrs(nsta);
+	std::vector<uint16_t> offsets(nsta);
+	// xseis::VecOfSpans<xseis::Complex32> dwins(nchan);
 
-	// // for(auto&& i : groups) {
-	// // 	std::cout << "i: " << i << "\n";
-	// // }
+	// for(size_t gix = 0; gix < ngrid; ++gix) {
+	uint16_t origintime = 266;
+	size_t gix = 130032;
 
-	// auto pairs_all = xseis::UniquePairs(keys);
-	// // auto pairs = xseis::DistFiltPairs(pairs_all.rows(), stalocs.rows(), 300, 1500);
-	// auto pairs = pairs_all.rows();
+	std::vector<uint16_t> wblocks;
 
-	// xseis::NpzSave(file_out, "sta_ckeys", pairs_all.rows(), "a");
-	// std::cout << "pairs_all.nrow(): " << pairs_all.nrow() << '\n';
-	// std::cout << "npairs: " << pairs.size() << '\n';
-	// logger.log("keygen");
-	// // return 0;
+	auto ttp = ttable.row(gix);
+	for(size_t ista = 0; ista < nsta; ++ista) {
+		uint16_t iblock = (origintime + ttp[ista]) / blockstep;
+		wblocks.push_back(iblock);
+		offsets[ista] = iblock * flen_pad;		
+	}
+	xseis::NpzSave(file_out, "wblocks", gsl::make_span(wblocks), "a");
+
+	// for(size_t i = 0; i < pairs.size(); ++i) {
+	// 	// auto csig = ccdat.span(i);
+	// 	// Fill(csig, 0.0f);
+
+	// 	uint32_t nstack = 0;
+	// 	auto pair = pairs[i];
+	// 	for(auto&& k0 : groups[pair[0]]) {
+	// 		for(auto&& k1 : groups[pair[1]]) {
+	// 			XCorr(fbdat.row(k0), fbdat.row(k1), fbuf.data(), fbuf.size());
+	// 			Convolve(&vshift[0], fbuf.data(), fbuf.size());
+	// 			fftwf_execute_dft_c2r(plan_inv, fptr, buf.data());
+	// 			Multiply(buf.span(), 1.0f / energy);
+	// 			for(size_t j=0; j < buf.size(); ++j) csig[j] += std::abs(buf[j]);	
+	// 			nstack++;
+	// 		}
+	// 	}
+	// 	// Multiply(csig, wlen, 1.0f / static_cast<float>(nstack));		
+	// 	Multiply(csig, 1.0f / static_cast<float>(nstack));
+	// 	// uint32_t zlen = 10;
+	// 	// for(size_t k = wlen / 2 - zlen; k < wlen / 2 + zlen; ++k) csig[k] = 0;
+	// 	Copy(csig, buf.span());
+	// 	if(wlen_smooth != 0) SlidingWinMax(buf.span(), csig, wlen_smooth);
+	// }
+
+	// }
+
+// uint32_t tt = ot + tt_ixs[ichan];
+// 					uint32_t iblock = tt / dt;			
+// 					uint32_t rollby = tt % dt;
+
+	// return 0;
 
 	// auto ccdat = xseis::Array2D<float>(pairs.size(), dat.ncol());	
 	// // xseis::XCorrChanGroupsEnvelope(fdat, groups, pairs, ccdat);
@@ -159,23 +212,8 @@ int main(int argc, char const *argv[])
 	// logger.log("vmax_cc");
 
 
-	// // 1400, 1300, 1000
-	// // auto grid = xseis::Grid({1200, 1600, 1100, 1500, 800, 1200, 5});
-	// // auto grid = xseis::Grid({500, 2000, 500, 1900, 500, 1800, 10});
-	// auto grid = xseis::Grid({500, 2000, 500, 1900, 200, 1500, 25});
-	// auto points = grid.points();
-	// xseis::NpzSave(file_out, "grid_points", points.rows(), "a");
-	// xseis::NpzSave(file_out, "grid_lims", grid.lims(), "a");
-	// logger.log("build points");
 
-
-	// float vel = 5000;
-	// auto ttable = xseis::Array2D<uint16_t>(stalocs.nrow(), points.nrow());
-	// xseis::FillTravelTimeTable(stalocs, points, vel, sr, ttable);
-	// logger.log("Fill ttable");
-	// // xseis::NpzSave(file_out, "ttable", ttable.rows(), "a");
-	// // logger.log("Save tts");
-
+	
 	// auto power = xseis::Vector<float>(points.nrow());
 	// xseis::InterLocBlocks(ccdat.rows(), pairs, ttable.rows(), power.span());
 	// logger.log("interloc");

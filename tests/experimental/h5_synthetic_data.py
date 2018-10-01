@@ -73,12 +73,12 @@ for i, group in enumerate(cgroups):
 
 band = [10, 1000]
 xutil.add_noise(dsim, band, sr, power=0.5e-2)
-xplot.sigs(dsim[::10])
+# xplot.sigs(dsim[::10])
 
 dd = xutil.dist2many(src_loc, stalocs)[chanmap]
 isort = np.argsort(dd)
 # xplot.sigs(dsim[isort])
-xplot.im(dsim[isort])
+# xplot.im(dsim[isort])
 # mx = np.max(dsim, axis=1)
 # plt.scatter(mx, dd)
 

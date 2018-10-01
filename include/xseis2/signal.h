@@ -83,36 +83,36 @@ size_t ArgMin(gsl::span<T> data) {
 // }
 
 
-#pragma omp declare simd aligned(sig1, sig2:MEM_ALIGNMENT)
+#pragma omp declare simd aligned(sig1, sig2:MIN_ALIGN)
 void Convolve(Complex32 const* const sig2, Complex32* const sig1, uint32_t const nfreq)
 {
-	#pragma omp simd aligned(sig1, sig2:MEM_ALIGNMENT)
+	#pragma omp simd aligned(sig1, sig2:MIN_ALIGN)
 	for (uint32_t i = 0; i < nfreq; ++i) sig1[i] *= sig2[i];
 }
 
 
-#pragma omp declare simd aligned(data, stack:MEM_ALIGNMENT)
+#pragma omp declare simd aligned(data, stack:MIN_ALIGN)
 inline void Accumulate(float const* const data, float* const stack,
 						 uint32_t const npts)
 {		
-	#pragma omp simd aligned(data, stack:MEM_ALIGNMENT)
+	#pragma omp simd aligned(data, stack:MIN_ALIGN)
 	for(uint32_t i = 0; i < npts; ++i) {
 		stack[i] += data[i];
 	}
 }
 
-#pragma omp declare simd aligned(sig:MEM_ALIGNMENT)
+#pragma omp declare simd aligned(sig:MIN_ALIGN)
 void Whiten(Complex32* const sig, uint32_t const npts)
 {		
-	#pragma omp simd aligned(sig:MEM_ALIGNMENT)
+	#pragma omp simd aligned(sig:MIN_ALIGN)
 	for(uint32_t i = 0; i < npts; ++i) sig[i] /= std::abs(sig[i]);		
 }
 
 
-// #pragma omp declare simd aligned(sig:MEM_ALIGNMENT)
+// #pragma omp declare simd aligned(sig:MIN_ALIGN)
 // void Absolute(float* sig, uint32_t const npts)
 // {		
-// 	#pragma omp simd aligned(sig:MEM_ALIGNMENT)
+// 	#pragma omp simd aligned(sig:MIN_ALIGN)
 // 	for(uint32_t i = 0; i < npts; ++i) {
 // 		sig[i] = std::abs(sig[i]);
 // 	}
@@ -120,7 +120,7 @@ void Whiten(Complex32* const sig, uint32_t const npts)
 
 void AbsCopy(gsl::span<Complex32> const in, gsl::span<float> out)
 {	
-	// #pragma omp simd aligned(sig:MEM_ALIGNMENT)
+	// #pragma omp simd aligned(sig:MIN_ALIGN)
 	for(uint32_t i = 0; i < in.size(); ++i) {
 		out[i] = std::abs(in[i]);
 	}
@@ -129,28 +129,28 @@ void AbsCopy(gsl::span<Complex32> const in, gsl::span<float> out)
 
 // void NormCopy(gsl::span<Complex32> const in, gsl::span<float> out)
 // {	
-// 	// #pragma omp simd aligned(sig:MEM_ALIGNMENT)
+// 	// #pragma omp simd aligned(sig:MIN_ALIGN)
 // 	for(uint32_t i = 0; i < in.size(); ++i) {
 // 		out[i] = std::norm(in[i]);
 // 	}
 // }
 
 
-#pragma omp declare simd aligned(sig1, sig2, out:MEM_ALIGNMENT)
+#pragma omp declare simd aligned(sig1, sig2, out:MIN_ALIGN)
 void XCorr(Complex32 const* const sig1, Complex32 const* const sig2,
 		   Complex32* const out, uint32_t const nfreq)
 {
-	#pragma omp simd aligned(sig1, sig2, out:MEM_ALIGNMENT)
+	#pragma omp simd aligned(sig1, sig2, out:MIN_ALIGN)
 	for (uint32_t i = 0; i < nfreq; ++i){
 		out[i] = std::conj(sig1[i]) * sig2[i];
 	}
 }
 
-// #pragma omp declare simd aligned(sig1, sig2:MEM_ALIGNMENT)
+// #pragma omp declare simd aligned(sig1, sig2:MIN_ALIGN)
 // float DotProductEnergy(float const* const sig1, float const* const sig2, uint32_t const npts)
 // {
 // 	float result = 0;
-// 	#pragma omp simd aligned(sig1, sig2:MEM_ALIGNMENT)
+// 	#pragma omp simd aligned(sig1, sig2:MIN_ALIGN)
 // 	for (uint32_t i = 0; i < npts; ++i){
 // 		// result += sig1[0] * sig2[0];		
 // 		result += (sig1[0] * sig2[0]) * (sig1[0] * sig2[0]);		
@@ -158,11 +158,11 @@ void XCorr(Complex32 const* const sig1, Complex32 const* const sig2,
 // 	return result;
 // }
 
-// #pragma omp declare simd aligned(sig1, sig2:MEM_ALIGNMENT)
+// #pragma omp declare simd aligned(sig1, sig2:MIN_ALIGN)
 // float DotProduct(float const* const sig1, float const* const sig2, uint32_t const npts)
 // {
 // 	float result = 0;
-// 	#pragma omp simd aligned(sig1, sig2:MEM_ALIGNMENT)
+// 	#pragma omp simd aligned(sig1, sig2:MIN_ALIGN)
 // 	for (uint32_t i = 0; i < npts; ++i){
 // 		result += sig1[0] * sig2[0];		
 // 	}

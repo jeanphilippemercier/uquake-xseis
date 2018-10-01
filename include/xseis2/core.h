@@ -19,8 +19,8 @@
 namespace xseis {
 
 const uint32_t CACHE_LINE = 64;
-const uint32_t MEM_ALIGNMENT = CACHE_LINE;
-// using Complex = float[2];
+// const uint32_t MEM_ALIGNMENT = CACHE_LINE;
+const uint32_t MIN_ALIGN = 16;
 using Complex32 = std::complex<float>;
 
 template <typename ValueType>
@@ -39,7 +39,7 @@ size_t PadToBytes(const size_t size, const uint32_t nbytes)
 }
 
 template <typename T>
-T* MallocAligned(const size_t N, const uint32_t alignment=MEM_ALIGNMENT)
+T* MallocAligned(const size_t N, const uint32_t alignment)
 {
 	return (T*) aligned_alloc(alignment, N * sizeof(T));
 }
@@ -49,7 +49,7 @@ template <typename ValueType, typename IndexType=size_t>
 class Vector {
 public:
 
-	const uint32_t alignment_ = MEM_ALIGNMENT;
+	const uint32_t alignment_ = CACHE_LINE;
 	using pointer = ValueType*;
 	using reference = ValueType&;
 	IndexType size_;
@@ -87,7 +87,7 @@ template <typename ValueType, typename IndexType=size_t>
 class Array2D {
 public:
 
-	const uint32_t alignment_ = MEM_ALIGNMENT;
+	const uint32_t alignment_ = CACHE_LINE;
 	using pointer = ValueType*;
 	using reference = ValueType&;
 	IndexType nrow_;
@@ -152,7 +152,7 @@ public:
 	constexpr pointer data() const noexcept { return data_; }
 	constexpr pointer row(IndexType ix_row) const noexcept 
 	{
-		assert(ix_row < nrow_);
+		// assert(ix_row < nrow_);
 		return data_ + (ix_row * ncol_pad_);
 	}
 
@@ -160,6 +160,8 @@ public:
 	// constexpr reference operator[] (IndexType ix) const { return data_[ix]; }
 	// value at ix, iy
 	constexpr reference operator() (IndexType ix_row, IndexType ix_col) const { return (row(ix_row) + ix_col)[0]; }
+	// constexpr pointer operator() (IndexType ix_row, IndexType ix_col) const { return row(ix_row) + ix_col; }
+
 	// row as view
 	// constexpr gsl::span<ValueType> operator() (IndexType ix_row) const
 	constexpr gsl::span<ValueType> span(IndexType ix_row) const

@@ -108,6 +108,8 @@ int main(int argc, char const *argv[])
 	std::cout << "wloc: " << points.span(imax) << "\n";
 	std::cout << "(vmax/theor): " << vmax << " / " << vmax_cc << " = " << vmax / vmax_cc * 100.0f << "% \n";
 
+	std::cout << "grid_imax: " << imax << "\n";
+
 	// auto SumRowMax = [=](xseis::VecOfSpans<float> dat){float sum=0; for(auto&& x : dat) sum += xseis::Max(x); return sum / dat.size() * 100;};
 
 	// std::cout << "vmax_cc: " << vmax_cc << "\n";
