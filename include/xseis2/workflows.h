@@ -20,7 +20,7 @@
 namespace xseis {
 
 
-void WFSearchOneVel(Array2D<float>& rdat, float sr, Array2D<float>& stalocs, Vector<uint16_t>& chanmap, Array2D<uint16_t>& ttable, int64_t* outbuf, std::string& file_out, int debug) 
+void WFSearchOneVel(Array2D<float>& rdat, float sr, Array2D<float>& stalocs, Vector<uint16_t>& chanmap, VecOfSpans<uint16_t> ttable, int64_t* outbuf, std::string& file_out, int debug) 
 {	
 	uint32_t const smooth_cc_wlen = 10;
 	auto logger = xseis::Logger();
@@ -54,8 +54,8 @@ void WFSearchOneVel(Array2D<float>& rdat, float sr, Array2D<float>& stalocs, Vec
 	auto vmax_cc = xseis::Mean(gsl::make_span(rmaxes));
 	logger.log("vmax_cc");
 
-	auto power = xseis::Vector<float>(ttable.ncol());
-	xseis::InterLocBlocks(ccdat.rows(), pairs, ttable.rows(), power.span());
+	auto power = xseis::Vector<float>(ttable[0].size());
+	xseis::InterLocBlocks(ccdat.rows(), pairs, ttable, power.span());
 	logger.log("interloc");
 	xseis::NpzSave(file_out, "grid_power", power.span(), "a");
 
@@ -64,15 +64,18 @@ void WFSearchOneVel(Array2D<float>& rdat, float sr, Array2D<float>& stalocs, Vec
 	// std::cout << "wloc: " << points.span(imax) << "\n";
 	std::cout << "(vmax/theor): " << vmax << " / " << vmax_cc << " = " << vmax / vmax_cc * 100.0f << "% \n";
 
-	auto wtt = ttable.copy_col(imax);
-	xseis::NpzSave(file_out, "tts_to_max", wtt.span(), "a");
+	std::vector<uint16_t> wtt;
+	for(auto&& row : ttable) wtt.push_back(row[imax]);
+		
+	// auto wtt = ttable.copy_col(imax);
+	xseis::NpzSave(file_out, "tts_to_max", gsl::make_span(wtt), "a");
 	logger.log("wtt");
 
 	// xseis::NpySave(dir_dat + "d1.npy", dat);
 	// xseis::RollAndStack(dat, groups, wtt.span());
 	xseis::Envelope(dat.rows());
 	logger.log("envelope");	
-	xseis::RollSigs(dat.rows(), groups, wtt.span());
+	xseis::RollSigs(dat.rows(), groups, gsl::make_span(wtt));
 	logger.log("roll");
 	auto stack = xseis::StackSigs(dat.rows());
 	logger.log("stack");
@@ -92,21 +95,20 @@ void WFSearchOneVel(Array2D<float>& rdat, float sr, Array2D<float>& stalocs, Vec
 
 }
 
-
-void SearchOnePhase(float* rawdat_p, uint32_t nchan, uint32_t npts, float sr, float* stalocs_p, uint32_t nsta, uint16_t* chanmap_p, uint16_t* ttable_ptr, uint32_t ngrid, int64_t* outbuf, uint32_t nthreads, std::string& file_out, int debug) 
+void SearchOnePhase(float* rawdat_p, uint32_t nchan, uint32_t npts, float sr, float* stalocs_p, uint32_t nsta, uint16_t* chanmap_p, std::vector<uint16_t*>& tt_ptrs, uint32_t ngrid, int64_t* outbuf, uint32_t nthreads, std::string& file_out, int debug) 
 {
 
 	omp_set_num_threads(nthreads);
 	std::string file_wisdom = "fftw3_wisdom.txt";
 	fftwf_import_wisdom_from_filename(&file_wisdom[0]);
+
+	VecOfSpans<uint16_t> ttable;
+	for(auto&& ptr : tt_ptrs) ttable.push_back(gsl::make_span(ptr, ngrid));		
 	
 	auto dat = Array2D<float>(rawdat_p, nchan, npts, true); // copies data
 	auto stalocs = Array2D<float>(stalocs_p, nsta, 3, false);
 	auto chanmap = Vector<uint16_t>(chanmap_p, nchan);
-	auto ttable = Array2D<uint16_t>(ttable_ptr, nsta, ngrid, false);
-	// auto ttable2 = Array2D<uint16_t>(ttable2_ptr, nsta, ngrid);
-	// auto grid = Vector<float>(grid_p, ngrid);
-	// CorrSearchDec2XBoth(rawdat, sr, stalocs, chanmap, ttable1, ttable2, outbuf, nthreads, logdir, debug);
+	// auto ttable = Array2D<uint16_t>(ttable_ptr, nsta, ngrid, false);
 
 	WFSearchOneVel(dat, sr, stalocs, chanmap, ttable, outbuf, file_out, debug);
 
@@ -116,6 +118,33 @@ void SearchOnePhase(float* rawdat_p, uint32_t nchan, uint32_t npts, float sr, fl
 
 	
 }
+
+
+
+
+// void SearchOnePhase(float* rawdat_p, uint32_t nchan, uint32_t npts, float sr, float* stalocs_p, uint32_t nsta, uint16_t* chanmap_p, uint16_t* ttable_ptr, uint32_t ngrid, int64_t* outbuf, uint32_t nthreads, std::string& file_out, int debug) 
+// {
+
+// 	omp_set_num_threads(nthreads);
+// 	std::string file_wisdom = "fftw3_wisdom.txt";
+// 	fftwf_import_wisdom_from_filename(&file_wisdom[0]);
+	
+// 	auto dat = Array2D<float>(rawdat_p, nchan, npts, true); // copies data
+// 	auto stalocs = Array2D<float>(stalocs_p, nsta, 3, false);
+// 	auto chanmap = Vector<uint16_t>(chanmap_p, nchan);
+// 	auto ttable = Array2D<uint16_t>(ttable_ptr, nsta, ngrid, false);
+// 	// auto ttable2 = Array2D<uint16_t>(ttable2_ptr, nsta, ngrid);
+// 	// auto grid = Vector<float>(grid_p, ngrid);
+// 	// CorrSearchDec2XBoth(rawdat, sr, stalocs, chanmap, ttable1, ttable2, outbuf, nthreads, logdir, debug);
+
+// 	WFSearchOneVel(dat, sr, stalocs, chanmap, ttable, outbuf, file_out, debug);
+
+// 	// InterLocDec2X(Array2D<float> &dat, float sr, Array2D<float> &stalocs, Vector<uint16_t> &chanmap, Array2D<uint16_t> &ttable, uint32_t *outbuf, Vector<float> &grid, std::string &file_out, int debug)
+
+// 	fftwf_export_wisdom_to_filename(&file_wisdom[0]);
+
+	
+// }
 
 
 
@@ -217,6 +246,15 @@ void SearchWinDec2X(float* rawdat_p, uint32_t nchan, uint32_t npts, float sr, fl
 	
 }
 
+
+void CythonTest(std::vector<uint16_t*>& vals, int ncol) 
+{
+	for(auto&& ptr : vals) {
+		auto span = gsl::make_span(ptr, ncol);
+		std::cout << "span: " << span << "\n";
+	}
+	
+}
 
 
 
