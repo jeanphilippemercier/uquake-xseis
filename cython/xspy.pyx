@@ -9,12 +9,10 @@ from libc.stdint cimport uintptr_t
 # from libc.stdint cimport uintptr_t
 from libcpp.vector cimport vector
 
-ctypedef uint16_t* uint16_ptr
-# ctypedef Foo* Foo_pointer
+ctypedef uint16_t* uint16_ptr # pointer workaround
 
 cdef extern from "xseis2/workflows.h" namespace "xseis":
 
-	# void SearchOnePhase(float* rawdat_p, uint32_t nchan, uint32_t npts, float sr, float* stalocs_p, uint32_t nsta, uint16_t* chanmap_p, uint16_t* ttable_ptr, uint32_t ngrid, int64_t* outbuf, uint32_t nthreads, string& file_out, int debug)
 	void SearchOnePhase(float* rawdat_p, uint32_t nchan, uint32_t npts, float sr, float* stalocs_p, uint32_t nsta, uint16_t* chanmap_p, vector[uint16_ptr]& tt_ptrs_vec, uint32_t ngrid, int64_t* outbuf, uint32_t nthreads, string& file_out, int debug)
 
 	void CythonTest(vector[uint16_ptr]& vals, int ncol)  
@@ -22,14 +20,18 @@ cdef extern from "xseis2/workflows.h" namespace "xseis":
 
 def pySearchOnePhase(np.ndarray[np.float32_t, ndim=2] data,
 					sr,
-					np.ndarray[np.float32_t, ndim=2] stalocs,
 					np.ndarray[np.uint16_t, ndim=1] chanmap,
+					np.ndarray[np.float32_t, ndim=2] stalocs,					
 					np.ndarray[np.int64_t, ndim=1] tt_ptrs,
 					ngrid,
 					nthreads,
 					outfile,
 					debug
 			   ):
+
+	stalocs = np.ascontiguousarray(stalocs)
+	data = np.ascontiguousarray(data)
+
 	assert(data.shape[0] == chanmap.shape[0])
 	assert(tt_ptrs.shape[0] == stalocs.shape[0])
 
@@ -52,7 +54,9 @@ def pySearchOnePhase(np.ndarray[np.float32_t, ndim=2] data,
 					outfile_str,
 					debug
 					)
-	return out
+
+	out_list = [float(out[0]) / 10000., out[1], out[2]]
+	return out_list
 
 
 

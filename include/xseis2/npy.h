@@ -6,7 +6,7 @@
 // #include <vector>
 // #include <stdlib.h>
 // #include <malloc.h>
-#include "cnpy.h"
+#include "cnpy/cnpy.h"
 
 #include "xseis2/core.h"
 

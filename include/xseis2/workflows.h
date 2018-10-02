@@ -20,82 +20,85 @@
 namespace xseis {
 
 
-void WFSearchOneVel(Array2D<float>& rdat, float sr, Array2D<float>& stalocs, Vector<uint16_t>& chanmap, VecOfSpans<uint16_t> ttable, int64_t* outbuf, std::string& file_out, int debug) 
+void WFSearchOnePhase(Array2D<float>& rdat, float sr, Array2D<float>& stalocs, Vector<uint16_t>& chanmap, VecOfSpans<uint16_t> ttable, int64_t* outbuf, std::string& npzfile, int debug) 
 {	
-	uint32_t const smooth_cc_wlen = 10;
 	auto logger = xseis::Logger();
-	// PREPROC ///////////////////////////////////////////////////////////////////////
+	if (debug > 0) logger.log("Start");
+
+	// PREPROC //////////////////////////////////////////////////////////////
 	auto dat = xseis::ZeroPad(rdat, rdat.ncol() * 2);
-	logger.log("create padded");
+	if (debug > 0) logger.log("create padded");
 
 	auto fdat = xseis::WhitenAndFFT(dat, sr, {40, 50, 350, 360});
-	logger.log("fft");
-	xseis::NpzSave(file_out, "sigs_preproc", dat.rows(), "w");
-	logger.log("save dat");
+	if (debug > 0) logger.log("fft");
+	if (debug == 2) xseis::NpzSave(npzfile, "dat_preproc", dat.rows(), "w");
+	if (debug == 2) logger.log("save dat");
 
+	// KEYGEN //////////////////////////////////////////////////////////////
 	auto groups = xseis::GroupChannels(chanmap.span());
-
 	auto keys = xseis::Arange<uint16_t>(0, stalocs.nrow());
-	auto pairs_all = xseis::UniquePairs(keys);
-	// auto pairs = xseis::DistFiltPairs(pairs_all.rows(), stalocs.rows(), 300, 1500);
-	auto pairs = pairs_all.rows();
+	auto allpairs = xseis::UniquePairs(keys);
+	// auto pairs = xseis::DistFiltPairs(allpairs.rows(), stalocs.rows(), 300, 1500);
+	auto pairs = allpairs.rows();
+	if (debug > 0) printf("using %lu pairs of %lu total\n", pairs.size(), allpairs.nrow());
+	if (debug > 0) logger.log("build sta pairs");
+	if (debug == 2) xseis::NpzSave(npzfile, "sta_pairs", pairs, "a");
+	if (debug == 2) logger.log("save sta pairs");
 
-	xseis::NpzSave(file_out, "sta_ckeys", pairs_all.rows(), "a");
-	std::cout << "pairs_all.nrow(): " << pairs_all.nrow() << '\n';
-	std::cout << "npairs: " << pairs.size() << '\n';
-	logger.log("keygen");
-
+	// XCORRS //////////////////////////////////////////////////////////////
+	uint32_t const smooth_cc_wlen = 10;
 	auto ccdat = xseis::Array2D<float>(pairs.size(), dat.ncol());	
 	xseis::XCorrChanGroupsAbs(fdat, groups, pairs, ccdat, smooth_cc_wlen);
-	logger.log("xcorr");
-	xseis::NpzSave(file_out, "sigs_xcorrs", ccdat.rows(), "a");
-	logger.log("save ccfs");	
-	auto rmaxes = xseis::RowMaxes(ccdat.rows());
-	auto vmax_cc = xseis::Mean(gsl::make_span(rmaxes));
-	logger.log("vmax_cc");
-
+	if (debug > 0) logger.log("xcorr");
+	if (debug == 2) xseis::NpzSave(npzfile, "dat_cc", ccdat.rows(), "a");
+	if (debug == 2) logger.log("save ccfs");	
+	
+	// SEARCH //////////////////////////////////////////////////////////////
 	auto power = xseis::Vector<float>(ttable[0].size());
 	xseis::InterLocBlocks(ccdat.rows(), pairs, ttable, power.span());
-	logger.log("interloc");
-	xseis::NpzSave(file_out, "grid_power", power.span(), "a");
+	size_t imax = xseis::ArgMax(power.span());
+	float vmax = xseis::Max(power.span());
+	if (debug > 0) logger.log("interloc");
+	if (debug == 2) xseis::NpzSave(npzfile, "grid_power", power.span(), "a");
+	if (debug == 2) logger.log("save grid");
 
-	auto imax = xseis::ArgMax(power.span());
-	auto vmax = xseis::Max(power.span());
-	// std::cout << "wloc: " << points.span(imax) << "\n";
-	std::cout << "(vmax/theor): " << vmax << " / " << vmax_cc << " = " << vmax / vmax_cc * 100.0f << "% \n";
+	auto rmaxes = xseis::RowMaxes(ccdat.rows());
+	float max_theor = xseis::Mean(gsl::make_span(rmaxes));
+	// if (debug > 0) logger.log("cc theor max");	
+	float peak_align = vmax / max_theor * 100.0f;
+	if (debug > 0) printf("(max_grid / max_theor)= %f / %f = %f%%\n", vmax, max_theor, peak_align);
 
+
+	// ROLL FOR ORIGIN_TIME ////////////////////////////////////////////////////
 	std::vector<uint16_t> wtt;
-	for(auto&& row : ttable) wtt.push_back(row[imax]);
-		
-	// auto wtt = ttable.copy_col(imax);
-	xseis::NpzSave(file_out, "tts_to_max", gsl::make_span(wtt), "a");
-	logger.log("wtt");
+	for(auto&& row : ttable) wtt.push_back(row[imax]);		
+	if (debug > 0) logger.log("tts to source");
+	if (debug==2) xseis::NpzSave(npzfile, "tts_src", gsl::make_span(wtt), "a");
+	if (debug==2) logger.log("save wtt");
 
-	// xseis::NpySave(dir_dat + "d1.npy", dat);
 	// xseis::RollAndStack(dat, groups, wtt.span());
 	xseis::Envelope(dat.rows());
-	logger.log("envelope");	
+	if (debug > 0) logger.log("envelope");	
 	xseis::RollSigs(dat.rows(), groups, gsl::make_span(wtt));
-	logger.log("roll");
+	if (debug > 0) logger.log("roll");
 	auto stack = xseis::StackSigs(dat.rows());
-	logger.log("stack");
+	if (debug > 0) logger.log("stack");
 	
-	xseis::NpzSave(file_out, "sigs_rolled", dat.rows(), "a");
-	xseis::NpzSave(file_out, "sig_stack", stack.span(), "a");
+	if (debug==2) xseis::NpzSave(npzfile, "sigs_rolled", dat.rows(), "a");
+	if (debug==2) xseis::NpzSave(npzfile, "sig_stack", stack.span(), "a");
 
 	auto otime = xseis::ArgMax(stack.span());
-	std::cout << "otime: " << otime << "\n";
-	std::cout << "imax: " << imax << "\n";
+	if (debug > 0) printf("[gmax] %f [imax] %lu [ot_imax] %lu\n", vmax, imax, otime);
 
-	outbuf[0] = vmax * 10000;
-	outbuf[1] = imax;
-	outbuf[2] = otime; // ot ix for original sr
+	outbuf[0] = static_cast<int64_t>(vmax * 10000); // max power scaled
+	outbuf[1] = imax; // tt grid argmax
+	outbuf[2] = otime; // origin time argmax
 
-	logger.summary();
+	if (debug > 0) logger.summary();
 
 }
 
-void SearchOnePhase(float* rawdat_p, uint32_t nchan, uint32_t npts, float sr, float* stalocs_p, uint32_t nsta, uint16_t* chanmap_p, std::vector<uint16_t*>& tt_ptrs, uint32_t ngrid, int64_t* outbuf, uint32_t nthreads, std::string& file_out, int debug) 
+void SearchOnePhase(float* rawdat_p, uint32_t nchan, uint32_t npts, float sr, float* stalocs_p, uint32_t nsta, uint16_t* chanmap_p, std::vector<uint16_t*>& tt_ptrs, uint32_t ngrid, int64_t* outbuf, uint32_t nthreads, std::string& npzfile, int debug) 
 {
 
 	omp_set_num_threads(nthreads);
@@ -110,154 +113,10 @@ void SearchOnePhase(float* rawdat_p, uint32_t nchan, uint32_t npts, float sr, fl
 	auto chanmap = Vector<uint16_t>(chanmap_p, nchan);
 	// auto ttable = Array2D<uint16_t>(ttable_ptr, nsta, ngrid, false);
 
-	WFSearchOneVel(dat, sr, stalocs, chanmap, ttable, outbuf, file_out, debug);
-
-	// InterLocDec2X(Array2D<float> &dat, float sr, Array2D<float> &stalocs, Vector<uint16_t> &chanmap, Array2D<uint16_t> &ttable, uint32_t *outbuf, Vector<float> &grid, std::string &file_out, int debug)
+	WFSearchOnePhase(dat, sr, stalocs, chanmap, ttable, outbuf, npzfile, debug);
 
 	fftwf_export_wisdom_to_filename(&file_wisdom[0]);
-
 	
 }
 
-
-
-
-// void SearchOnePhase(float* rawdat_p, uint32_t nchan, uint32_t npts, float sr, float* stalocs_p, uint32_t nsta, uint16_t* chanmap_p, uint16_t* ttable_ptr, uint32_t ngrid, int64_t* outbuf, uint32_t nthreads, std::string& file_out, int debug) 
-// {
-
-// 	omp_set_num_threads(nthreads);
-// 	std::string file_wisdom = "fftw3_wisdom.txt";
-// 	fftwf_import_wisdom_from_filename(&file_wisdom[0]);
-	
-// 	auto dat = Array2D<float>(rawdat_p, nchan, npts, true); // copies data
-// 	auto stalocs = Array2D<float>(stalocs_p, nsta, 3, false);
-// 	auto chanmap = Vector<uint16_t>(chanmap_p, nchan);
-// 	auto ttable = Array2D<uint16_t>(ttable_ptr, nsta, ngrid, false);
-// 	// auto ttable2 = Array2D<uint16_t>(ttable2_ptr, nsta, ngrid);
-// 	// auto grid = Vector<float>(grid_p, ngrid);
-// 	// CorrSearchDec2XBoth(rawdat, sr, stalocs, chanmap, ttable1, ttable2, outbuf, nthreads, logdir, debug);
-
-// 	WFSearchOneVel(dat, sr, stalocs, chanmap, ttable, outbuf, file_out, debug);
-
-// 	// InterLocDec2X(Array2D<float> &dat, float sr, Array2D<float> &stalocs, Vector<uint16_t> &chanmap, Array2D<uint16_t> &ttable, uint32_t *outbuf, Vector<float> &grid, std::string &file_out, int debug)
-
-// 	fftwf_export_wisdom_to_filename(&file_wisdom[0]);
-
-	
-// }
-
-
-
-
-void SearchWinDec2X(Array2D<float>& dat, float sr, Array2D<float>& stalocs, Vector<uint16_t>& chanmap, Array2D<uint16_t>& ttable, uint32_t* outbuf, std::string& file_out, int debug) 
-{	
-	auto logger = xseis::Logger();
-	// PREPROC ///////////////////////////////////////////////////////////////////////
-	auto fdat = xseis::WhitenAndFFTPadDec2x(dat, sr, {40, 50, 350, 360});
-	logger.log("fft");
-	xseis::NpzSave(file_out, "sigs_preproc", dat.rows(), "w");
-	logger.log("save dat");
-
-	// Correlate ///////////////////////////////////////////////////////////////////
-	// group similar channels and create cc pairs
-	auto keys = xseis::Arange<uint16_t>(0, stalocs.nrow());
-	// auto groups = xseis::GroupChannels(keys, chanmap);
-	auto groups = xseis::GroupChannels(chanmap.span());
-
-	auto pairs_all = xseis::UniquePairs(keys);
-	// auto pairs = xseis::DistFiltPairs(pairs_all.rows(), stalocs.rows(), 300, 1500);
-	auto pairs = pairs_all.rows();
-
-	xseis::NpzSave(file_out, "sta_ckeys", pairs_all.rows(), "a");
-	std::cout << "pairs_all.nrow(): " << pairs_all.nrow() << '\n';
-	std::cout << "npairs: " << pairs.size() << '\n';
-	logger.log("keygen");
-	// return 0;
-
-	auto ccdat = xseis::Array2D<float>(pairs.size(), dat.ncol());	
-	// xseis::XCorrChanGroupsEnvelope(fdat, groups, pairs, ccdat);
-	xseis::XCorrChanGroupsAbs(fdat, groups, pairs, ccdat);
-	logger.log("xcorr");
-	xseis::NpzSave(file_out, "sigs_xcorrs", ccdat.rows(), "a");
-	logger.log("save ccfs");	
-	auto rmaxes = xseis::RowMaxes(ccdat.rows());
-	auto vmax_cc = xseis::Mean(gsl::make_span(rmaxes));
-	logger.log("vmax_cc");
-
-	auto power = xseis::Vector<float>(ttable.ncol());
-	xseis::InterLocBlocks(ccdat.rows(), pairs, ttable.rows(), power.span());
-	logger.log("interloc");
-	xseis::NpzSave(file_out, "grid_power", power.span(), "a");
-
-	auto imax = xseis::ArgMax(power.span());
-	auto vmax = xseis::Max(power.span());
-	// std::cout << "wloc: " << points.span(imax) << "\n";
-	std::cout << "(vmax/theor): " << vmax << " / " << vmax_cc << " = " << vmax / vmax_cc * 100.0f << "% \n";
-
-	auto wtt = ttable.copy_col(imax);
-	xseis::NpzSave(file_out, "tts_to_max", wtt.span(), "a");
-	logger.log("wtt");
-
-	// xseis::NpySave(dir_dat + "d1.npy", dat);
-	// xseis::RollAndStack(dat, groups, wtt.span());
-	xseis::Envelope(dat.rows());
-	logger.log("envelope");	
-	xseis::RollSigs(dat.rows(), groups, wtt.span());
-	logger.log("roll");
-	auto stack = xseis::StackSigs(dat.rows());
-	logger.log("stack");
-	
-	xseis::NpzSave(file_out, "sigs_rolled", dat.rows(), "a");
-	xseis::NpzSave(file_out, "sig_stack", stack.span(), "a");
-
-	auto otime = xseis::ArgMax(stack.span()) * 2;
-	std::cout << "otime: " << otime << "\n";
-
-	outbuf[0] = vmax * 10000;
-	outbuf[1] = imax;
-	outbuf[2] = otime; // ot ix for original sr
-
-	logger.summary();
-
 }
-
-
-void SearchWinDec2X(float* rawdat_p, uint32_t nchan, uint32_t npts, float sr, float* stalocs_p, uint32_t nsta, uint16_t* chanmap_p, uint16_t* ttable_ptr, uint32_t ngrid, uint32_t* outbuf, uint32_t nthreads, std::string& file_out, int debug) 
-{
-
-	omp_set_num_threads(nthreads);
-	std::string file_wisdom = "fftw3_wisdom.txt";
-	fftwf_import_wisdom_from_filename(&file_wisdom[0]);
-	
-	auto dat = Array2D<float>(rawdat_p, nchan, npts, true); // copies data
-	auto stalocs = Array2D<float>(stalocs_p, nsta, 3, false);
-	auto chanmap = Vector<uint16_t>(chanmap_p, nchan);
-	auto ttable = Array2D<uint16_t>(ttable_ptr, nsta, ngrid, false);
-	// auto ttable2 = Array2D<uint16_t>(ttable2_ptr, nsta, ngrid);
-	// auto grid = Vector<float>(grid_p, ngrid);
-	// CorrSearchDec2XBoth(rawdat, sr, stalocs, chanmap, ttable1, ttable2, outbuf, nthreads, logdir, debug);
-
-	SearchWinDec2X(dat, sr, stalocs, chanmap, ttable, outbuf, file_out, debug);
-
-	// InterLocDec2X(Array2D<float> &dat, float sr, Array2D<float> &stalocs, Vector<uint16_t> &chanmap, Array2D<uint16_t> &ttable, uint32_t *outbuf, Vector<float> &grid, std::string &file_out, int debug)
-
-	fftwf_export_wisdom_to_filename(&file_wisdom[0]);
-
-	
-}
-
-
-void CythonTest(std::vector<uint16_t*>& vals, int ncol) 
-{
-	for(auto&& ptr : vals) {
-		auto span = gsl::make_span(ptr, ncol);
-		std::cout << "span: " << span << "\n";
-	}
-	
-}
-
-
-
-
-}
-

@@ -8,7 +8,11 @@ echo running $filename
 # g++-6 msview2.cpp -std=c++14 -Wall -o main -lmseed
 # g++-6 $fullfile -std=c++14 -Wall -o main -lmseed
 
-time g++-7 $fullfile -std=c++17 -Wall -o temp -O3 -march=native -ffast-math -lhdf5_serial -lhdf5_cpp -pthread -lfftw3f -lm -fopenmp -lstdc++fs -lcnpy -lz -lbenchmark && time ./temp
+# time g++-7 $fullfile -std=c++17 -Wall -o temp -O3 -march=native -ffast-math -lhdf5_serial -lhdf5_cpp -pthread -lfftw3f -lm -fopenmp -lstdc++fs -lcnpy -lz -lbenchmark && time ./temp
+
+# time g++-7 $fullfile -std=c++17 -Wall -o temp -O3 -march=native -ffast-math -lhdf5_serial -lhdf5_cpp -pthread -lfftw3f -lm -fopenmp -lstdc++fs -L../lib/ -lcnpy -lz -lbenchmark && time ./temp
+
+time g++-7 $fullfile -std=c++17 -Wall -o temp -O3 -march=native -ffast-math -lhdf5_serial -lhdf5_cpp -pthread -lfftw3f -lm -fopenmp -lstdc++fs -lcnpy -lz && time ./temp
 
 # time g++-7 $fullfile -std=c++17 -Wall -o temp -O3 -march=native -ffast-math -lhdf5_serial -lhdf5_cpp -pthread -lfftw3f -lm -fopenmp -lmseed -lstdc++fs && time ./temp
 

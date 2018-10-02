@@ -16,6 +16,7 @@ void InterLocBlocks(const VecOfSpans<float> data_cc, const VecOfSpans<uint16_t> 
 	assert((uintptr_t) data_cc[1].data() % MIN_ALIGN == 0);
 	assert((uintptr_t) output.data() % MIN_ALIGN == 0); 
 	assert((uintptr_t) ttable[1].data() % MIN_ALIGN == 0);	
+	// assert((uintptr_t) ttable[1].data() % CACHE_LINE == 0);	
 	// assert(ckeys.size() == data_cc.size());
 
 	Fill(output, 0.0f);	

@@ -49,7 +49,7 @@ public:
 
 	Logger(){
 		start();
-		std::cout << color << TimeStamp() << "Start" << clr::reset << '\n';
+		// std::cout << color << TimeStamp() << "Start" << clr::reset << '\n';
 	}
 	
 	void start(){

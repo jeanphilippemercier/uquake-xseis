@@ -510,6 +510,9 @@ void XCorrChanGroupsEnvelope(Array2D<Complex32>& fdat, KeyGroups& groups, VecOfS
 // ccf for each sta pair = stacked envelopes of inter-channel ccfs
 void XCorrChanGroupsAbs(Array2D<Complex32>& fdat, KeyGroups& groups, VecOfSpans<uint16_t> pairs, Array2D<float>& ccdat, uint32_t wlen_smooth=0) 
 {
+	assert((uintptr_t) ccdat.row(1) % MIN_ALIGN == 0);
+	assert((uintptr_t) fdat.row(1) % MIN_ALIGN == 0);
+
 	uint32_t wlen = ccdat.ncol();
 	uint32_t nfreq = fdat.ncol();
 
