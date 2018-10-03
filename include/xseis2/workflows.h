@@ -66,6 +66,7 @@ void WFSearchOnePhase(Array2D<float>& rdat, float sr, Array2D<float>& stalocs, V
 	float max_theor = xseis::Mean(gsl::make_span(rmaxes));
 	// if (debug > 0) logger.log("cc theor max");	
 	float peak_align = vmax / max_theor * 100.0f;
+	if (debug > 0) logger.log("cc maxes");
 	if (debug > 0) printf("(max_grid / max_theor)= %f / %f = %f%%\n", vmax, max_theor, peak_align);
 
 
@@ -106,7 +107,15 @@ void SearchOnePhase(float* rawdat_p, uint32_t nchan, uint32_t npts, float sr, fl
 	fftwf_import_wisdom_from_filename(&file_wisdom[0]);
 
 	VecOfSpans<uint16_t> ttable;
-	for(auto&& ptr : tt_ptrs) ttable.push_back(gsl::make_span(ptr, ngrid));		
+	for(auto&& ptr : tt_ptrs) ttable.push_back(gsl::make_span(ptr, ngrid));
+
+	// Array2D<uint16_t> ttable(tt_ptrs.size(), ngrid);
+	// for(size_t i = 0; i < tt_ptrs.size(); ++i) {
+	// 	xseis::Copy(tt_ptrs[i], ngrid, ttable.row(i));
+	// }
+	// std::cout << "copy ttable\n";
+	// for(auto&& ptr : tt_ptrs) ttable.push_back(gsl::make_span(ptr, ngrid));
+
 	
 	auto dat = Array2D<float>(rawdat_p, nchan, npts, true); // copies data
 	auto stalocs = Array2D<float>(stalocs_p, nsta, 3, false);
@@ -114,6 +123,7 @@ void SearchOnePhase(float* rawdat_p, uint32_t nchan, uint32_t npts, float sr, fl
 	// auto ttable = Array2D<uint16_t>(ttable_ptr, nsta, ngrid, false);
 
 	WFSearchOnePhase(dat, sr, stalocs, chanmap, ttable, outbuf, npzfile, debug);
+	// WFSearchOnePhase(dat, sr, stalocs, chanmap, ttable.rows(), outbuf, npzfile, debug);
 
 	fftwf_export_wisdom_to_filename(&file_wisdom[0]);
 	

@@ -49,8 +49,8 @@ int main(int argc, char const *argv[])
 
 	std::vector<int64_t> outbuf(3);
 	// xseis::WFSearchOneVel(dat, sr, stalocs, chanmap, ttable, outbuf.data(), file_out, 0);
-	
-	xseis::WFSearchOnePhase(dat, sr, stalocs, chanmap, ttable.rows(), outbuf.data(), file_out, 2);
+
+	xseis::WFSearchOnePhase(dat, sr, stalocs, chanmap, ttable.rows(), outbuf.data(), file_out, 1);
 
 	logger.log("FULLSEARCH");
 	logger.summary();

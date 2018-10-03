@@ -22,18 +22,21 @@ npz_file = ddir + 'output.npz'
 tts_path = '/home/phil/data/oyu/NLLOC_grids/'
 
 nthreads = int(4)
-debug = int(2)
+debug = int(1)
 dsr = float(3000.)
-wlen_fixed = int(1 * dsr)
+wlen_sec = 1.0
+# wlen_fixed = int(1 * dsr)
 
 ttable, stalocs, namedict, gdef = xutil.ttable_from_nll_grids(tts_path, key="OT.P")
 ttable = (ttable * dsr).astype(np.uint16)
 ngrid = ttable.shape[1]
 tt_ptrs = np.array([row.__array_interface__['data'][0] for row in ttable])
 
+reload(xutil)
+reload(xflow)
 st = read(mseed_file)
-xflow.prep_stream(st, dsr)
-data, t0, stations, chanmap = xflow.build_input_data(st, wlen_fixed)
+xflow.prep_stream(st)
+data, t0, stations, chanmap = xflow.build_input_data(st, wlen_sec, dsr)
 ikeep = np.array([namedict[k] for k in stations])
 
 out = xspy.pySearchOnePhase(data, dsr, chanmap, stalocs[ikeep], tt_ptrs[ikeep],
