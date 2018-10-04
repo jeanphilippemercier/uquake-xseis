@@ -27,22 +27,17 @@ inline float DistCartesian(float* a, float* b)
 	return std::sqrt(dx * dx + dy * dy + dz * dz);
 }
 
+
+inline float DistCartesian(gsl::span<float> a, gsl::span<float> b)
+{	
+	return DistCartesian(a.data(), b.data());
+}
+
 inline float DistCartesian2D(float* a, float* b)
 {	
 	float dx = a[0] - b[0];
 	float dy = a[1] - b[1];
 	return std::sqrt(dx * dx + dy * dy);
-}
-
-
-inline float DistCartesian(gsl::span<float> a, gsl::span<float> b)
-{	
-	// float val = 0;
-	float v[3];
-	v[0] = a[0] - b[0];
-	v[1] = a[1] - b[1];
-	v[2] = a[2] - b[2];
-	return std::sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]);
 }
 
 
@@ -262,9 +257,7 @@ std::vector<float> RowMaxes (const VecOfSpans<float> dat)
 	std::vector<float> maxes;
 	maxes.reserve(dat.size());
 	for(auto&& x : dat) maxes.emplace_back(xseis::Max(x));
-	return maxes;
-	// auto SumRowMax = [=](xseis::VecOfSpans<float> dat){float sum=0; for(auto&& x : dat) sum += xseis::Max(x); return sum / dat.size() * 100;};
-	// auto SumRowMax = [=](xseis::VecOfSpans<float> dat){float sum=0; for(auto&& x : dat) sum += xseis::Max(x); return sum / dat.size() * 100;};
+	return maxes;	
 }
 
 template<typename T>
@@ -407,106 +400,6 @@ Array2D<Complex32> WhitenAndFFT(Array2D<float>& dat, float const sr, std::vector
 }
 
 
-Array2D<Complex32> WhitenAndFFTPadDec2x(Array2D<float>& dat, float& sr, std::vector<float> cfreqs, float taper_len=0.02) 
-{
-
-	size_t nchan = dat.nrow();
-	size_t wlen = dat.ncol();
-	size_t nfreq = wlen / 2 + 1;
-	uint32_t taper_nsamp = taper_len * wlen;
-
-	// size_t wlen_pad = wlen * 2;
-	// size_t nfreq_pad = wlen_pad / 2 + 1;
-
-	auto fdat = Array2D<Complex32>(nchan, nfreq);
-	auto filter = BuildFreqFilter(cfreqs, nfreq, sr);
-	// float energy = Energy(filter.span()) * 2;
-
-	auto buf = Vector<float>(wlen);
-
-	// auto fbuf = Vector<Complex32>(wlen);
-	auto fptr = reinterpret_cast<fftwf_complex*>(fdat.row(0));	
-	fftwf_plan plan_fwd = fftwf_plan_dft_r2c_1d(wlen, buf.data(), fptr, FFTW_PATIENCE);
-	fftwf_plan plan_inv = fftwf_plan_dft_c2r_1d(wlen, fptr, buf.data(), FFTW_PATIENCE);
-	
-	#pragma omp parallel for
-	for(size_t i = 0; i < dat.nrow(); ++i) {
-		auto fptr = reinterpret_cast<fftwf_complex*>(fdat.row(i));
-		auto sig = dat.span(i);
-		fftwf_execute_dft_r2c(plan_fwd, sig.data(), fptr);
-		ApplyFreqFilterReplace(filter.span(), fdat.span(i)); // apply whiten
-		fftwf_execute_dft_c2r(plan_inv, fptr, sig.data());
-		TaperCosine(sig, taper_nsamp);
-		Multiply(sig, 1.0f / static_cast<float>(wlen));		
-		for(size_t j = 0; j < wlen / 2; ++j) sig[j] = sig[j * 2];
-		for(size_t j = wlen / 2; j < wlen; ++j) sig[j] = 0;
-
-		fftwf_execute_dft_r2c(plan_fwd, sig.data(), fptr);
-	}
-	sr /= 2;
-
-	return fdat;
-}
-
-
-// ccf for each sta pair = stacked envelopes of inter-channel ccfs
-void XCorrChanGroupsEnvelope(Array2D<Complex32>& fdat, KeyGroups& groups, VecOfSpans<uint16_t> pairs, Array2D<float>& ccdat) 
-{
-	uint32_t wlen = ccdat.ncol();
-	uint32_t nfreq = fdat.ncol();
-
-	// values to roll ccfs for zero lag in middle (conv in freq domain)
-	auto vshift = BuildPhaseShiftVec(nfreq, wlen / 2);
-	float energy = Energy(fdat.span(0)) * 2;
-	std::cout << "energy: " << energy << "\n";
-
-
-	auto fb = Vector<Complex32>(wlen); // only used for planning to not destroy fdat
-	auto fptr = reinterpret_cast<fftwf_complex*>(fb.data());	
-	fftwf_plan plan_c2c = fftwf_plan_dft_1d(wlen, fptr, fptr, FFTW_BACKWARD, FFTW_PATIENCE);
-
-	#pragma omp parallel
-	{
-		auto fbuf = Vector<Complex32>(wlen);
-		auto fptr = reinterpret_cast<fftwf_complex*>(fbuf.data());
-
-		auto fbuf_pos = gsl::make_span(fbuf.data(), fbuf.data() + wlen / 2);
-		auto fbuf_neg = gsl::make_span(fbuf.data() + wlen / 2, fbuf.end());
-
-		#pragma omp for
-		for(size_t i = 0; i < pairs.size(); ++i) {
-			auto pair = pairs[i];
-			float *csig = ccdat.row(i);
-			std::fill(csig, csig + wlen, 0);
-
-			uint32_t nstack = 0;		
-			for(auto&& k0 : groups[pair[0]]) {
-				for(auto&& k1 : groups[pair[1]]) {
-					Fill(fbuf_neg, {0.0f, 0.0f});
-					XCorr(fdat.row(k0), fdat.row(k1), fbuf_pos.data(), fbuf_pos.size());
-					// Multiply(fbuf_pos.subspan(1), {2.0f, 0.0f});
-					Multiply(fbuf_pos.subspan(1), 2.0f);
-					Convolve(&vshift[0], fbuf_pos.data(), fbuf_pos.size());
-
-					fftwf_execute_dft(plan_c2c, fptr, fptr);
-					Multiply(fbuf.span(), 1.0f / energy);
-					// Multiply(fbuf.span(), {1.0f / energy, 0.0f});
-					// Absolute(fbuf.data(), wlen, ccdat.row(nstack));
-					// AbsCopy(fbuf.span(), dat.span(k));
-
-					for(size_t j=0; j < fbuf.size(); ++j)
-					{
-						csig[j] += std::norm(fbuf[j]);	
-					} 
-					nstack++;
-				}
-			}
-			// Multiply(csig, wlen, 1.0f / static_cast<float>(nstack));		
-			Multiply(gsl::make_span(csig, wlen), 1.0f / static_cast<float>(nstack));		
-		}
-	}
-}
-
 // ccf for each sta pair = stacked envelopes of inter-channel ccfs
 void XCorrChanGroupsAbs(Array2D<Complex32>& fdat, KeyGroups& groups, VecOfSpans<uint16_t> pairs, Array2D<float>& ccdat, uint32_t wlen_smooth=0) 
 {
@@ -641,6 +534,109 @@ float MADMax(gsl::span<float> power, uint32_t scale=1) {
 	float mdev = (vmax - med) / mad * scale;	
 	return mdev;
 }
+
+
+
+// Array2D<Complex32> WhitenAndFFTPadDec2x(Array2D<float>& dat, float& sr, std::vector<float> cfreqs, float taper_len=0.02) 
+// {
+
+// 	size_t nchan = dat.nrow();
+// 	size_t wlen = dat.ncol();
+// 	size_t nfreq = wlen / 2 + 1;
+// 	uint32_t taper_nsamp = taper_len * wlen;
+
+// 	// size_t wlen_pad = wlen * 2;
+// 	// size_t nfreq_pad = wlen_pad / 2 + 1;
+
+// 	auto fdat = Array2D<Complex32>(nchan, nfreq);
+// 	auto filter = BuildFreqFilter(cfreqs, nfreq, sr);
+// 	// float energy = Energy(filter.span()) * 2;
+
+// 	auto buf = Vector<float>(wlen);
+
+// 	// auto fbuf = Vector<Complex32>(wlen);
+// 	auto fptr = reinterpret_cast<fftwf_complex*>(fdat.row(0));	
+// 	fftwf_plan plan_fwd = fftwf_plan_dft_r2c_1d(wlen, buf.data(), fptr, FFTW_PATIENCE);
+// 	fftwf_plan plan_inv = fftwf_plan_dft_c2r_1d(wlen, fptr, buf.data(), FFTW_PATIENCE);
+	
+// 	#pragma omp parallel for
+// 	for(size_t i = 0; i < dat.nrow(); ++i) {
+// 		auto fptr = reinterpret_cast<fftwf_complex*>(fdat.row(i));
+// 		auto sig = dat.span(i);
+// 		fftwf_execute_dft_r2c(plan_fwd, sig.data(), fptr);
+// 		ApplyFreqFilterReplace(filter.span(), fdat.span(i)); // apply whiten
+// 		fftwf_execute_dft_c2r(plan_inv, fptr, sig.data());
+// 		TaperCosine(sig, taper_nsamp);
+// 		Multiply(sig, 1.0f / static_cast<float>(wlen));		
+// 		for(size_t j = 0; j < wlen / 2; ++j) sig[j] = sig[j * 2];
+// 		for(size_t j = wlen / 2; j < wlen; ++j) sig[j] = 0;
+
+// 		fftwf_execute_dft_r2c(plan_fwd, sig.data(), fptr);
+// 	}
+// 	sr /= 2;
+
+// 	return fdat;
+// }
+
+
+// // ccf for each sta pair = stacked envelopes of inter-channel ccfs
+// void XCorrChanGroupsEnvelope(Array2D<Complex32>& fdat, KeyGroups& groups, VecOfSpans<uint16_t> pairs, Array2D<float>& ccdat) 
+// {
+// 	uint32_t wlen = ccdat.ncol();
+// 	uint32_t nfreq = fdat.ncol();
+
+// 	// values to roll ccfs for zero lag in middle (conv in freq domain)
+// 	auto vshift = BuildPhaseShiftVec(nfreq, wlen / 2);
+// 	float energy = Energy(fdat.span(0)) * 2;
+// 	std::cout << "energy: " << energy << "\n";
+
+
+// 	auto fb = Vector<Complex32>(wlen); // only used for planning to not destroy fdat
+// 	auto fptr = reinterpret_cast<fftwf_complex*>(fb.data());	
+// 	fftwf_plan plan_c2c = fftwf_plan_dft_1d(wlen, fptr, fptr, FFTW_BACKWARD, FFTW_PATIENCE);
+
+// 	#pragma omp parallel
+// 	{
+// 		auto fbuf = Vector<Complex32>(wlen);
+// 		auto fptr = reinterpret_cast<fftwf_complex*>(fbuf.data());
+
+// 		auto fbuf_pos = gsl::make_span(fbuf.data(), fbuf.data() + wlen / 2);
+// 		auto fbuf_neg = gsl::make_span(fbuf.data() + wlen / 2, fbuf.end());
+
+// 		#pragma omp for
+// 		for(size_t i = 0; i < pairs.size(); ++i) {
+// 			auto pair = pairs[i];
+// 			float *csig = ccdat.row(i);
+// 			std::fill(csig, csig + wlen, 0);
+
+// 			uint32_t nstack = 0;		
+// 			for(auto&& k0 : groups[pair[0]]) {
+// 				for(auto&& k1 : groups[pair[1]]) {
+// 					Fill(fbuf_neg, {0.0f, 0.0f});
+// 					XCorr(fdat.row(k0), fdat.row(k1), fbuf_pos.data(), fbuf_pos.size());
+// 					// Multiply(fbuf_pos.subspan(1), {2.0f, 0.0f});
+// 					Multiply(fbuf_pos.subspan(1), 2.0f);
+// 					Convolve(&vshift[0], fbuf_pos.data(), fbuf_pos.size());
+
+// 					fftwf_execute_dft(plan_c2c, fptr, fptr);
+// 					Multiply(fbuf.span(), 1.0f / energy);
+// 					// Multiply(fbuf.span(), {1.0f / energy, 0.0f});
+// 					// Absolute(fbuf.data(), wlen, ccdat.row(nstack));
+// 					// AbsCopy(fbuf.span(), dat.span(k));
+
+// 					for(size_t j=0; j < fbuf.size(); ++j)
+// 					{
+// 						csig[j] += std::norm(fbuf[j]);	
+// 					} 
+// 					nstack++;
+// 				}
+// 			}
+// 			// Multiply(csig, wlen, 1.0f / static_cast<float>(nstack));		
+// 			Multiply(gsl::make_span(csig, wlen), 1.0f / static_cast<float>(nstack));		
+// 		}
+// 	}
+// }
+
 
 
 }

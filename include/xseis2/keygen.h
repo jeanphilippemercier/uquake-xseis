@@ -80,6 +80,18 @@ VecOfSpans<uint16_t> DistFiltPairs(VecOfSpans<uint16_t> pairs, VecOfSpans<float>
 	return pairs_filt;
 }
 
+std::vector<float> DistDiffPairs(VecOfSpans<uint16_t> pairs, VecOfSpans<float> locs) {
+
+	std::vector<float> dd;
+	dd.reserve(pairs.size());
+
+	for(auto&& p : pairs) {
+		dd.emplace_back(DistCartesian(locs[p[0]], locs[p[1]]));		
+	}
+
+	return dd;
+}
+
 
 
 // KeyPairs UniquePairs(std::vector<uint16_t>& keys)

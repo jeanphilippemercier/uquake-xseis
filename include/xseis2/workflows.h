@@ -38,12 +38,13 @@ void WFSearchOnePhase(Array2D<float>& rdat, float sr, Array2D<float>& stalocs, V
 	auto groups = xseis::GroupChannels(chanmap.span());
 	auto keys = xseis::Arange<uint16_t>(0, stalocs.nrow());
 	auto allpairs = xseis::UniquePairs(keys);
-	// auto pairs = xseis::DistFiltPairs(allpairs.rows(), stalocs.rows(), 300, 1500);
-	auto pairs = allpairs.rows();
+	// auto pairs = allpairs.rows();
+	auto pairs = xseis::DistFiltPairs(allpairs.rows(), stalocs.rows(), 0, 2000);
 	if (debug > 0) printf("using %lu pairs of %lu total\n", pairs.size(), allpairs.nrow());
 	if (debug > 0) logger.log("build sta pairs");
 	if (debug == 2) xseis::NpzSave(npzfile, "sta_pairs", pairs, "a");
 	if (debug == 2) logger.log("save sta pairs");
+
 
 	// XCORRS //////////////////////////////////////////////////////////////
 	uint32_t const smooth_cc_wlen = 10;
@@ -52,7 +53,11 @@ void WFSearchOnePhase(Array2D<float>& rdat, float sr, Array2D<float>& stalocs, V
 	if (debug > 0) logger.log("xcorr");
 	if (debug == 2) xseis::NpzSave(npzfile, "dat_cc", ccdat.rows(), "a");
 	if (debug == 2) logger.log("save ccfs");	
-	
+
+	// xseis::IsValidTTable(pairs, ttable, ccdat.ncol());
+	// auto dd = xseis::DistDiffPairs(pairs, stalocs.rows());
+	// std::cout << "max dist_diff: " << xseis::Max(gsl::make_span(dd)) << "\n";
+
 	// SEARCH //////////////////////////////////////////////////////////////
 	auto power = xseis::Vector<float>(ttable[0].size());
 	xseis::InterLocBlocks(ccdat.rows(), pairs, ttable, power.span());
@@ -85,8 +90,8 @@ void WFSearchOnePhase(Array2D<float>& rdat, float sr, Array2D<float>& stalocs, V
 	auto stack = xseis::StackSigs(dat.rows());
 	if (debug > 0) logger.log("stack");
 	
-	if (debug==2) xseis::NpzSave(npzfile, "sigs_rolled", dat.rows(), "a");
-	if (debug==2) xseis::NpzSave(npzfile, "sig_stack", stack.span(), "a");
+	if (debug==2) xseis::NpzSave(npzfile, "dat_rolled", dat.rows(), "a");
+	if (debug==2) xseis::NpzSave(npzfile, "dat_stack", stack.span(), "a");
 
 	auto otime = xseis::ArgMax(stack.span());
 	if (debug > 0) printf("[gmax] %f [imax] %lu [ot_imax] %lu\n", vmax, imax, otime);
@@ -103,19 +108,13 @@ void SearchOnePhase(float* rawdat_p, uint32_t nchan, uint32_t npts, float sr, fl
 {
 
 	omp_set_num_threads(nthreads);
-	std::string file_wisdom = "fftw3_wisdom.txt";
+	std::string const XSHOME = std::getenv("XSEISPATH") ? std::getenv("XSEISPATH") : ".";
+	std::string file_wisdom = XSHOME + "/data/fftw3_wisdom.txt";
 	fftwf_import_wisdom_from_filename(&file_wisdom[0]);
+	std::cout << "file_wisdom: " << file_wisdom << "\n";
 
 	VecOfSpans<uint16_t> ttable;
 	for(auto&& ptr : tt_ptrs) ttable.push_back(gsl::make_span(ptr, ngrid));
-
-	// Array2D<uint16_t> ttable(tt_ptrs.size(), ngrid);
-	// for(size_t i = 0; i < tt_ptrs.size(); ++i) {
-	// 	xseis::Copy(tt_ptrs[i], ngrid, ttable.row(i));
-	// }
-	// std::cout << "copy ttable\n";
-	// for(auto&& ptr : tt_ptrs) ttable.push_back(gsl::make_span(ptr, ngrid));
-
 	
 	auto dat = Array2D<float>(rawdat_p, nchan, npts, true); // copies data
 	auto stalocs = Array2D<float>(stalocs_p, nsta, 3, false);

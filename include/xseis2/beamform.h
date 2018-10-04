@@ -53,6 +53,31 @@ void InterLocBlocks(const VecOfSpans<float> data_cc, const VecOfSpans<uint16_t> 
 }
 
 
+void IsValidTTable(const VecOfSpans<uint16_t> ckeys, const VecOfSpans<uint16_t> ttable, uint32_t const wlen)
+{
+
+	const int hlen = wlen / 2;
+	const size_t ncc = ckeys.size();
+	const size_t ngrid = ttable[0].size();
+
+	int maxdiff = 0;
+	// #pragma omp for
+	for (size_t i = 0; i < ncc; ++i)
+	{			
+		uint16_t* tts_sta1 = ttable[ckeys[i][0]].data();	
+		uint16_t* tts_sta2 = ttable[ckeys[i][1]].data();	
+		
+		for (size_t j = 0; j < ngrid; ++j) {
+			int cix = std::abs(static_cast<int>(tts_sta2[j]) - static_cast<int>(tts_sta1[j]));
+			if (cix > maxdiff) maxdiff = cix;
+		}
+	}
+	if (maxdiff > hlen) printf("FAILED: max tt_diff exceeds half cc_wlen\n");
+	else printf("PASSED: max tt_diff within half cc_wlen\n");
+	printf("tt_diff: %d / %d\n", maxdiff, hlen);
+
+}
+
 
 // void InterLocBlocks2(Array2D<float>& data_cc, Array2D<uint16_t>& ckeys, Array2D<uint16_t>& ttable, Vector<float>& output, uint32_t blocksize=1024 * 8, float scale_pwr=100)
 // {
