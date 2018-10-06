@@ -10,15 +10,15 @@ from xseis2 import xspy
 from xseis2 import xflow
 
 from xseis2 import xutil
-from xseis import xplot
-from xseis import xplot3d
+from xseis2 import xplot
+from xseis2 import xplot3d
 # from xseis import xobs
 
 plt.ion()
 
 ddir = "/home/phil/data/oyu/synthetic/"
-# mseed_file = ddir + 'sim_dat.mseed'
-mseed_file = ddir + 'sim_dat2.mseed'
+mseed_file = ddir + 'sim_dat.mseed'
+# mseed_file = ddir + 'sim_dat2.mseed'
 # mseed_file = '/home/phil/data/oyu/sim_dat2.mseed'
 npz_file = ddir + 'output.npz'
 tts_path = '/home/phil/data/oyu/NLLOC_grids/'

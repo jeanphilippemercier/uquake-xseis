@@ -26,10 +26,9 @@ int main(int argc, char const *argv[])
 	auto logger = xseis::Logger();
 
 	// IO ///////////////////////////////////////////////////////////////////////
-	std::string const HOME = std::getenv("HOME") ? std::getenv("HOME") : ".";
+	std::string const HOME = std::getenv("HOME");
 	std::string dir_dat = HOME + "/data/oyu/synthetic/";
-
-	std::string const XSHOME = std::getenv("XSEISPATH") ? std::getenv("XSEISPATH") : ".";
+	std::string const XSHOME = std::getenv("XSHOME");
 	std::string file_wisdom = XSHOME + "/data/fftw3_wisdom.txt";
 	fftwf_import_wisdom_from_filename(&file_wisdom[0]);
 	std::cout << "file_wisdom: " << file_wisdom << "\n";
@@ -46,8 +45,8 @@ int main(int argc, char const *argv[])
 	logger.log("load");
 
 	auto hf_tt = xseis::H5File(dir_dat + "nll_ttable.h5");	
-	// auto ttable = hf_tt["tts_p"].LoadArray<uint16_t>();	
-	auto ttable = hf_tt["tts_s"].LoadArray<uint16_t>();	
+	auto ttable = hf_tt["tts_p"].LoadArray<uint16_t>();	
+	// auto ttable = hf_tt["tts_s"].LoadArray<uint16_t>();	
 	logger.log("load_tt");
 	// auto points = hf_tt["grid_locs"].LoadArray<float>();	
 	// logger.log("load_glocs");
