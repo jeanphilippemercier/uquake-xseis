@@ -1,3 +1,8 @@
+"""
+Consume kafka mseed messages
+Searches for seismic event in each mseed and outputs results into another queue
+"""
+
 from importlib import reload
 import numpy as np
 import os

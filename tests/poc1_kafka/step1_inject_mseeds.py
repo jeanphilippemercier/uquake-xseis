@@ -1,3 +1,6 @@
+"""
+Injects local mseed files into kafka queue
+"""
 import numpy as np
 import os
 # import struct
@@ -5,12 +8,11 @@ import glob
 from importlib import reload
 # import datetime
 from obspy import read
-from xseis import xutil
-from xseis import xloc
+from xseis2 import xutil
 from io import BytesIO
 from spp.utils.kafka import KafkaHandler
 import yaml
-import time
+# import time
 
 config_dir = os.environ['SPP_CONFIG']
 fname = os.path.join(config_dir, 'data_connector_config.yaml')
