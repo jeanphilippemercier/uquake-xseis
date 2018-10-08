@@ -43,53 +43,56 @@ cd xseis/cython
 bash compile.sh
 
 
-# NOT SURE ABOUT ANYTHING BELOW THIS LINE ###########################################################
 
 
 
-############################################################
-# microquake and SPP
-############################################################
-git clone http://seismic-gitlab.eastus.cloudapp.azure.com/root/microquake.git
-git clone http://seismic-gitlab.eastus.cloudapp.azure.com/root/seismic-processing-platform.git
 
 
-# Add Kafka Servers into hosts file 
-sudo su -c "<<EOF echo '
-10.0.0.13 kafka-node-001
-10.0.0.14 kafka-node-002
-10.0.0.15 kafka-node-003
-' >> /etc/hosts
-EOF"
+# # NOT SURE ABOUT ANYTHING BELOW THIS LINE ###########################################################
+
+# ############################################################
+# # microquake and SPP
+# ############################################################
+# git clone http://seismic-gitlab.eastus.cloudapp.azure.com/root/microquake.git
+# git clone http://seismic-gitlab.eastus.cloudapp.azure.com/root/seismic-processing-platform.git
 
 
-# Add Environment variables in profile
-
-cat >> ~/.profile <<EOF
-#######
-#### Seismic Project Variables
-export SPP_CONFIG="/home/spadmin/projects/seismic-processing-platform/config"
-export SPP_COMMON="/home/spadmin/projects/seismic-processing-platform/common"
-####
-
-# MTH: add path to NLLOC executables:
-export PATH=$PATH:/home/spadmin/projects/nlloc/bin
-
-export PYTHONPATH="${PYTHONPATH}:${HOME}/projects/seismic-processing-platform"
+# # Add Kafka Servers into hosts file 
+# sudo su -c "<<EOF echo '
+# 10.0.0.13 kafka-node-001
+# 10.0.0.14 kafka-node-002
+# 10.0.0.15 kafka-node-003
+# ' >> /etc/hosts
+# EOF"
 
 
-### Fix pip
-export LC_ALL=C
+# # Add Environment variables in profile
 
-# first create the directory 
-export SHARED_DIR=/mnt/seismic_shared_storage
-sudo mkdir -p $SHARED_DIR
+# cat >> ~/.profile <<EOF
+# #######
+# #### Seismic Project Variables
+# export SPP_CONFIG="/home/spadmin/projects/seismic-processing-platform/config"
+# export SPP_COMMON="/home/spadmin/projects/seismic-processing-platform/common"
+# ####
 
-# mount the shared cloud FS on the directory
-sudo mount -t cifs //spsharedstorageaccount.file.core.windows.net/seismic-shared-storage $SHARED_DIR -o vers=3.0,username=spsharedstorageaccount,password=uB0tk++iIIb3A/VRORQ7453wD974qyXENxrtmM/meZeBqBmH9f1ZGyikKymbRhaV0ulVbq25GAgIwL1C3ydmiQ==,dir_mode=0777,file_mode=0777,sec=ntlmssp
-#######
-EOF
+# # MTH: add path to NLLOC executables:
+# export PATH=$PATH:/home/spadmin/projects/nlloc/bin
+
+# export PYTHONPATH="${PYTHONPATH}:${HOME}/projects/seismic-processing-platform"
 
 
-# Reload .profile
-source ~/.profile
+# ### Fix pip
+# export LC_ALL=C
+
+# # first create the directory 
+# export SHARED_DIR=/mnt/seismic_shared_storage
+# sudo mkdir -p $SHARED_DIR
+
+# # mount the shared cloud FS on the directory
+# sudo mount -t cifs //spsharedstorageaccount.file.core.windows.net/seismic-shared-storage $SHARED_DIR -o vers=3.0,username=spsharedstorageaccount,password=uB0tk++iIIb3A/VRORQ7453wD974qyXENxrtmM/meZeBqBmH9f1ZGyikKymbRhaV0ulVbq25GAgIwL1C3ydmiQ==,dir_mode=0777,file_mode=0777,sec=ntlmssp
+# #######
+# EOF
+
+
+# # Reload .profile
+# source ~/.profile
