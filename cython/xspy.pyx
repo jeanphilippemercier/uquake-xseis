@@ -13,7 +13,7 @@ ctypedef uint16_t* uint16_ptr # pointer workaround
 
 cdef extern from "xseis2/workflows.h" namespace "xseis":
 
-	void SearchOnePhase(float* rawdat_p, uint32_t nchan, uint32_t npts, float sr, float* stalocs_p, uint32_t nsta, uint16_t* chanmap_p, vector[uint16_ptr]& tt_ptrs_vec, uint32_t ngrid, int64_t* outbuf, uint32_t nthreads, string& file_out, int debug)
+	void SearchOnePhase(float* rawdat_p, uint32_t nchan, uint32_t npts, float sr, float* stalocs_p, uint32_t nsta, uint16_t* chanmap_p, vector[uint16_ptr]& tt_ptrs_vec, uint32_t ngrid, int64_t* outbuf, uint32_t nthreads, int debug, string& file_out)
 
 	void CythonTest(vector[uint16_ptr]& vals, int ncol)  
 
@@ -25,8 +25,8 @@ def pySearchOnePhase(np.ndarray[np.float32_t, ndim=2] data,
 					np.ndarray[np.int64_t, ndim=1] tt_ptrs,
 					ngrid,
 					nthreads,
-					outfile,
-					debug
+					debug,
+					outfile
 			   ):
 
 	stalocs = np.ascontiguousarray(stalocs)
@@ -51,8 +51,8 @@ def pySearchOnePhase(np.ndarray[np.float32_t, ndim=2] data,
 					tt_ptrs_vec, ngrid,
 					&out[0],
 					nthreads,
-					outfile_str,
-					debug
+					debug,
+					outfile_str
 					)
 
 	out_list = [float(out[0]) / 10000., out[1], out[2]]

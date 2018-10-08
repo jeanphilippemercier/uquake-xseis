@@ -23,7 +23,6 @@ KeyGroups GroupChannels(std::vector<uint16_t>& keys, Vector<uint16_t>& chanmap)
 {
 
 	KeyGroups groups;
-	size_t nkeys = keys.size();
 
 	for(auto&& k : keys) {
 

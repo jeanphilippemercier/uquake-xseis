@@ -44,11 +44,16 @@ data, t0, stations, chanmap = xflow.build_input_data(st, wlen_sec, dsr)
 ikeep = np.array([namedict[k] for k in stations])
 
 out = xspy.pySearchOnePhase(data, dsr, chanmap, stalocs[ikeep], tt_ptrs[ikeep],
-							 ngrid, nthreads, npz_file, debug)
+								 ngrid, nthreads, debug, npz_file)
 vmax, imax, iot = out
 print("power: %.3f, ix_grid: %d, ix_ot: %d" % (vmax, imax, iot))
+lmax = xutil.imax_to_xyz_gdef(imax, gdef)
+print(lmax.astype(int))
+ot_epoch = (t0 + iot / dsr).datetime.timestamp()
 
-lmax = xutil.imax_to_xyz_gdef(imax, gdef).astype(int)
+reload(xflow)
+msg, key = xflow.encode_for_kafka(ot_epoch, lmax, vmax)
+
 print(lmax)
 true_loc = np.array([651600, 4767420, 200])
 print('correct loc: ', np.allclose(lmax, true_loc))

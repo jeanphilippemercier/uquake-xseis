@@ -20,7 +20,7 @@
 namespace xseis {
 
 
-void WFSearchOnePhase(Array2D<float>& rdat, float sr, Array2D<float>& stalocs, Vector<uint16_t>& chanmap, VecOfSpans<uint16_t> ttable, int64_t* outbuf, std::string& npzfile, int debug) 
+void WFSearchOnePhase(Array2D<float>& rdat, float sr, Array2D<float>& stalocs, Vector<uint16_t>& chanmap, VecOfSpans<uint16_t> ttable, int64_t* outbuf, int debug, std::string& npzfile) 
 {	
 	auto logger = xseis::Logger();
 	if (debug > 0) logger.log("Start");
@@ -61,6 +61,9 @@ void WFSearchOnePhase(Array2D<float>& rdat, float sr, Array2D<float>& stalocs, V
 	// SEARCH //////////////////////////////////////////////////////////////
 	auto power = xseis::Vector<float>(ttable[0].size());
 	xseis::InterLocBlocks(ccdat.rows(), pairs, ttable, power.span());
+
+	// auto power = xseis::InterLoc(ccdat.rows(), pairs, ttable);
+	// auto power = xseis::InterLocBad(ccdat.rows(), pairs, ttable);
 	size_t imax = xseis::ArgMax(power.span());
 	float vmax = xseis::Max(power.span());
 	if (debug > 0) logger.log("interloc");
@@ -104,7 +107,7 @@ void WFSearchOnePhase(Array2D<float>& rdat, float sr, Array2D<float>& stalocs, V
 
 }
 
-void SearchOnePhase(float* rawdat_p, uint32_t nchan, uint32_t npts, float sr, float* stalocs_p, uint32_t nsta, uint16_t* chanmap_p, std::vector<uint16_t*>& tt_ptrs, uint32_t ngrid, int64_t* outbuf, uint32_t nthreads, std::string& npzfile, int debug) 
+void SearchOnePhase(float* rawdat_p, uint32_t nchan, uint32_t npts, float sr, float* stalocs_p, uint32_t nsta, uint16_t* chanmap_p, std::vector<uint16_t*>& tt_ptrs, uint32_t ngrid, int64_t* outbuf, uint32_t nthreads, int debug, std::string& npzfile) 
 {
 
 	omp_set_num_threads(nthreads);
@@ -121,7 +124,7 @@ void SearchOnePhase(float* rawdat_p, uint32_t nchan, uint32_t npts, float sr, fl
 	auto chanmap = Vector<uint16_t>(chanmap_p, nchan);
 	// auto ttable = Array2D<uint16_t>(ttable_ptr, nsta, ngrid, false);
 
-	WFSearchOnePhase(dat, sr, stalocs, chanmap, ttable, outbuf, npzfile, debug);
+	WFSearchOnePhase(dat, sr, stalocs, chanmap, ttable, outbuf, debug, npzfile);
 	// WFSearchOnePhase(dat, sr, stalocs, chanmap, ttable.rows(), outbuf, npzfile, debug);
 
 	fftwf_export_wisdom_to_filename(&file_wisdom[0]);

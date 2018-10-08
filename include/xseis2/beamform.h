@@ -3,6 +3,7 @@
 #include <omp.h>
 #include "xseis2/core.h"
 #include "xseis2/signal.h"
+#include "xseis2/logger.h"
 // #include <random>
 
 
@@ -18,6 +19,7 @@ void InterLocBlocks(const VecOfSpans<float> data_cc, const VecOfSpans<uint16_t> 
 	assert((uintptr_t) ttable[1].data() % MIN_ALIGN == 0);	
 	// assert((uintptr_t) ttable[1].data() % CACHE_LINE == 0);	
 	// assert(ckeys.size() == data_cc.size());
+	assert(output.size() == ttable[0].size());
 
 	Fill(output, 0.0f);	
 
@@ -51,6 +53,111 @@ void InterLocBlocks(const VecOfSpans<float> data_cc, const VecOfSpans<uint16_t> 
 	// float norm = scale_pwr / static_cast<float>(ncc);
 	// for(size_t i = 0; i < output.size_; ++i) output[i] *= norm;
 }
+
+Vector<float> InterLoc(const VecOfSpans<float> data_cc, const VecOfSpans<uint16_t> ckeys, const VecOfSpans<uint16_t> ttable, float scale_pwr=1.0)
+{	
+	// Each thread given own output buffer to prevent cache invalidations
+
+	// note asserts incorrectly pass when called through cython with python owned memory
+	assert((uintptr_t) data_cc[1].data() % MIN_ALIGN == 0);
+	assert((uintptr_t) ttable[1].data() % MIN_ALIGN == 0);	
+	// assert((uintptr_t) ttable[1].data() % CACHE_LINE == 0);	
+	// assert(ckeys.size() == data_cc.size());
+	// Fill(output, 0.0f);	
+
+	const uint16_t hlen = data_cc[0].size() / 2;	
+	const size_t ncc = ckeys.size();
+	const size_t ngrid = ttable[0].size();
+	const uint16_t nthreads = omp_get_max_threads();
+
+	auto buf_multi = Array2D<float>(nthreads, ngrid);
+
+	auto logger = xseis::Logger();
+	logger.log("Start");
+
+	#pragma omp parallel num_threads(nthreads)
+	{
+		float* out_ptr = buf_multi.row(omp_get_thread_num());
+		std::fill(out_ptr, out_ptr + ngrid, 0);
+		std::cout << "omp_get_thread_num(): " << omp_get_thread_num() << "\n";
+
+		#pragma omp for
+		for (size_t i = 0; i < ncc; ++i)
+		{	
+			uint16_t* tts_sta1 = ttable[ckeys[i][0]].data();	
+			uint16_t* tts_sta2 = ttable[ckeys[i][1]].data();	
+			float* cc_ptr = data_cc[i].data();
+
+			#pragma omp simd aligned(out_ptr, cc_ptr: MIN_ALIGN)
+			for (size_t j = 0; j < ngrid; ++j) {
+				out_ptr[j] += cc_ptr[hlen + tts_sta2[j] - tts_sta1[j]];
+			}
+			
+		}
+	}
+	logger.log("end iloc");
+
+	// combine thread buffers into final output
+	auto output = SumRows(buf_multi.rows());
+	Multiply(output.span(), scale_pwr / static_cast<float>(ncc));
+	logger.log("combine");
+	logger.summary();
+
+	return output;
+}
+
+
+Vector<float> InterLocBad(const VecOfSpans<float> data_cc, const VecOfSpans<uint16_t> ckeys, const VecOfSpans<uint16_t> ttable, float scale_pwr=1.0)
+{	
+	// Each thread given own output buffer to prevent cache invalidations
+
+	// note asserts incorrectly pass when called through cython with python owned memory
+	assert((uintptr_t) data_cc[1].data() % MIN_ALIGN == 0);
+	assert((uintptr_t) ttable[1].data() % MIN_ALIGN == 0);	
+	// assert((uintptr_t) ttable[1].data() % CACHE_LINE == 0);	
+	// assert(ckeys.size() == data_cc.size());
+	// Fill(output, 0.0f);	
+
+	const uint16_t hlen = data_cc[0].size() / 2;	
+	const size_t ncc = ckeys.size();
+	const size_t ngrid = ttable[0].size();
+	const uint16_t nthreads = omp_get_max_threads();
+
+	// auto buf_multi = Array2D<float>(nthreads, ngrid);
+	// auto buf_multi = Array2D<float>(nthreads, ngrid);
+	auto output = Vector<float>(ngrid);
+	Fill(output.span(), 0.0f);
+	float* out_ptr = output.data();
+
+	auto logger = xseis::Logger();
+	logger.log("Start");
+
+
+	#pragma omp parallel for
+	for (size_t i = 0; i < ncc; ++i)
+	{	
+		uint16_t* tts_sta1 = ttable[ckeys[i][0]].data();	
+		uint16_t* tts_sta2 = ttable[ckeys[i][1]].data();	
+		float* cc_ptr = data_cc[i].data();
+
+		// #pragma omp simd aligned(out_ptr, cc_ptr, tts_sta1, tts_sta2: MIN_ALIGN)
+		#pragma omp simd aligned(out_ptr, cc_ptr: MIN_ALIGN)
+		for (size_t j = 0; j < ngrid; ++j) {
+			out_ptr[j] += cc_ptr[hlen + tts_sta2[j] - tts_sta1[j]];
+		}
+		
+	}
+	logger.log("end iloc");
+
+	// combine thread buffers into final output
+	// auto output = SumRows(buf_multi.rows());
+	Multiply(output.span(), scale_pwr / static_cast<float>(ncc));
+	logger.log("combine");
+	logger.summary();
+
+	return output;
+}
+
 
 
 void IsValidTTable(const VecOfSpans<uint16_t> ckeys, const VecOfSpans<uint16_t> ttable, uint32_t const wlen)

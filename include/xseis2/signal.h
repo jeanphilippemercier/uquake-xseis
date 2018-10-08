@@ -367,6 +367,18 @@ Array2D<float> ZeroPad(Array2D<float>& dat, size_t npad)
 	return out;
 }
 
+Vector<float> SumRows(VecOfSpans<float> dat) 
+{
+	size_t npts = dat[0].size();
+	auto out = Vector<float>(npts);
+	Fill(out.span(), 0.0f);
+
+	for(size_t i = 0; i < dat.size(); ++i) {
+		Accumulate(dat[i].data(), out.data(), npts);
+	}
+	return out;
+}
+
 
 
 Array2D<Complex32> WhitenAndFFT(Array2D<float>& dat, float const sr, std::vector<float> cfreqs, float const taper_len=0.02) 
