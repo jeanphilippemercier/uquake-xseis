@@ -20,8 +20,9 @@
 int main(int argc, char const *argv[])
 {
 
-	uint32_t nthreads = 4;
+	uint32_t nthreads = 4;	
 	omp_set_num_threads(nthreads);
+	int debug = 1;
 
 	auto logger = xseis::Logger();
 
@@ -52,9 +53,8 @@ int main(int argc, char const *argv[])
 	// logger.log("load_glocs");
 
 	std::vector<int64_t> outbuf(3);
-	// xseis::WFSearchOneVel(dat, sr, stalocs, chanmap, ttable, outbuf.data(), file_out, 0);
 
-	xseis::WFSearchOnePhase(dat, sr, stalocs, chanmap, ttable.rows(), outbuf.data(), file_out, 1);
+	xseis::WFSearchOnePhase(dat, sr, stalocs, chanmap, ttable.rows(), outbuf.data(), debug, file_out);
 
 	logger.log("FULLSEARCH");
 	logger.summary();
