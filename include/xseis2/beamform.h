@@ -7,7 +7,7 @@
 // #include <random>
 
 
-namespace xseis {
+namespace xs {
 
 // Divide grid into blocks to prevent cache invalidations while writing to buffer from multiple threads
 // Requires all rows are aligned and blocksize is a multiple of alignment 
@@ -72,7 +72,7 @@ Vector<float> InterLoc(const VecOfSpans<float> data_cc, const VecOfSpans<uint16_
 
 	auto buf_multi = Array2D<float>(nthreads, ngrid);
 
-	auto logger = xseis::Logger();
+	auto logger = xs::Logger();
 	logger.log("Start");
 
 	#pragma omp parallel num_threads(nthreads)
@@ -129,7 +129,7 @@ Vector<float> InterLocBad(const VecOfSpans<float> data_cc, const VecOfSpans<uint
 	Fill(output.span(), 0.0f);
 	float* out_ptr = output.data();
 
-	auto logger = xseis::Logger();
+	auto logger = xs::Logger();
 	logger.log("Start");
 
 

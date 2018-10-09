@@ -13,7 +13,7 @@
 
 // #include <fstream>
 
-namespace xseis {
+namespace xs {
 
 namespace clr {
 	const std::string red("\033[0;31m");

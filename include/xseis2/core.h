@@ -16,7 +16,7 @@
 #include "gsl/span"
 
 
-namespace xseis {
+namespace xs {
 
 const uint32_t CACHE_LINE = 64;
 // const uint32_t MEM_ALIGNMENT = CACHE_LINE;
@@ -271,7 +271,7 @@ std::vector<T> Arange(T start, T stop, T step = 1) {
 
 
 
-} // end namespace xseis
+} // end namespace xs
 
 
 template<typename T>
@@ -288,7 +288,7 @@ std::ostream &operator <<(std::ostream &os, const std::vector<T> &v) {
 }
 
 template<typename T>
-std::ostream &operator <<(std::ostream &os, xseis::VecOfSpans<T> vspan) {
+std::ostream &operator <<(std::ostream &os, xs::VecOfSpans<T> vspan) {
 
 	if (vspan.size() < 100000)
 	{

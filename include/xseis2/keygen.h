@@ -9,7 +9,7 @@
 // #include <random>
 
 
-namespace xseis {
+namespace xs {
 
 // using KeyPairs = std::vector<uint16_t[2]>;
 

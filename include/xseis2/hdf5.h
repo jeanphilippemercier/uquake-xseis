@@ -9,7 +9,7 @@
 #include "xseis2/core.h"
 
 
-namespace xseis {
+namespace xs {
 
 
 // wrapper for h5 dataset
@@ -136,7 +136,7 @@ public:
 
 };
 
-} // end namespace xseis
+} // end namespace xs
 
 
 

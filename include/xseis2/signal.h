@@ -5,7 +5,7 @@
 #include "xseis2/core.h"
 
 
-namespace xseis {
+namespace xs {
 
 // const int FFTW_PATIENCE = FFTW_ESTIMATE;
 // const int FFTW_PATIENCE = FFTW_MEASURE;
@@ -256,7 +256,7 @@ std::vector<float> RowMaxes (const VecOfSpans<float> dat)
 {	
 	std::vector<float> maxes;
 	maxes.reserve(dat.size());
-	for(auto&& x : dat) maxes.emplace_back(xseis::Max(x));
+	for(auto&& x : dat) maxes.emplace_back(Max(x));
 	return maxes;	
 }
 
@@ -357,11 +357,11 @@ void ApplyFreqFilterReplace(const gsl::span<float> filter, gsl::span<Complex32> 
 
 Array2D<float> ZeroPad(Array2D<float>& dat, size_t npad) 
 {
-	auto out = xseis::Array2D<float>(dat.nrow(), npad);
+	auto out = Array2D<float>(dat.nrow(), npad);
 
 	for(size_t i = 0; i < dat.nrow(); ++i) {
-		xseis::Fill(out.span(i), 0.0f);
-		xseis::Copy(dat.row(i), dat.ncol(), out.row(i));
+		Fill(out.span(i), 0.0f);
+		Copy(dat.row(i), dat.ncol(), out.row(i));
 	}
 
 	return out;

@@ -24,7 +24,7 @@ int main(int argc, char const *argv[])
 	omp_set_num_threads(nthreads);
 	int debug = 1;
 
-	auto logger = xseis::Logger();
+	auto logger = xs::Logger();
 
 	// IO ///////////////////////////////////////////////////////////////////////
 	std::string const HOME = std::getenv("HOME");
@@ -36,17 +36,17 @@ int main(int argc, char const *argv[])
 
 	std::string file_out = HOME + "/data/oyu/synthetic/output.npz";
 	
-	auto hf = xseis::H5File(dir_dat + "sim_nll.h5");	
-	// auto hf = xseis::H5File(dir_dat + "sim_dat3.h5");	
-	// auto hf = xseis::H5File(dir_dat + "sim_nll_noise.h5");	
-	// auto hf = xseis::H5File(dir_dat + "real_185101.h5");	
+	auto hf = xs::H5File(dir_dat + "sim_nll.h5");	
+	// auto hf = xs::H5File(dir_dat + "sim_dat3.h5");	
+	// auto hf = xs::H5File(dir_dat + "sim_nll_noise.h5");	
+	// auto hf = xs::H5File(dir_dat + "real_185101.h5");	
 	auto sr = static_cast<float>(hf.attribute<double>("samplerate"));
 	auto stalocs = hf["sta_locs"].LoadArray<float>();
 	auto chanmap = hf["chan_map"].LoadVector<uint16_t>();
 	auto dat = hf["data"].LoadArray<float>();
 	logger.log("load");
 
-	auto hf_tt = xseis::H5File(dir_dat + "nll_ttable.h5");	
+	auto hf_tt = xs::H5File(dir_dat + "nll_ttable.h5");	
 	auto ttable = hf_tt["tts_p"].LoadArray<uint16_t>();	
 	// auto ttable = hf_tt["tts_s"].LoadArray<uint16_t>();	
 	logger.log("load_tt");
@@ -55,7 +55,7 @@ int main(int argc, char const *argv[])
 
 	std::vector<int64_t> outbuf(3);
 
-	xseis::WFSearchOnePhase(dat, sr, stalocs, chanmap, ttable.rows(), outbuf.data(), debug, file_out);
+	xs::WFSearchOnePhase(dat, sr, stalocs, chanmap, ttable.rows(), outbuf.data(), debug, file_out);
 
 	logger.log("FULLSEARCH");
 	logger.summary();

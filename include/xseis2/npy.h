@@ -17,7 +17,7 @@
 // typedef std::vector<std::vector<IndexType>> VVui64; 
 // typedef std::vector<std::vector<uint16_t>> VVui16; 	
 
-namespace xseis {
+namespace xs {
 
 template<typename T> void
 NpySave(std::string fname, Array2D<T>& data)
@@ -47,7 +47,7 @@ void NpySave(std::string fname, gsl::span<T> data, std::string mode = "w")
 
 
 template<typename T>
-void NpzSave(std::string zipname, std::string fname, xseis::VecOfSpans<T> data, std::string mode = "w")
+void NpzSave(std::string zipname, std::string fname, xs::VecOfSpans<T> data, std::string mode = "w")
 {
 	using namespace cnpy; // for overloaded + operator
 
@@ -161,7 +161,7 @@ void NpzSave(std::string zipname, std::string fname, xseis::VecOfSpans<T> data, 
 template<typename T>
 void NpzSave(std::string zipname, std::string fname, gsl::span<T> data, std::string mode = "w")
 {
-	xseis::VecOfSpans<T> vdata = {data};
+	xs::VecOfSpans<T> vdata = {data};
 	NpzSave(zipname, fname, vdata, mode);
 }
 

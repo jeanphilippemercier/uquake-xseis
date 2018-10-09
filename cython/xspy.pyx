@@ -11,7 +11,7 @@ from libcpp.vector cimport vector
 
 ctypedef uint16_t* uint16_ptr # pointer workaround
 
-cdef extern from "xseis2/workflows.h" namespace "xseis":
+cdef extern from "xseis2/workflows.h" namespace "xs":
 
 	void SearchOnePhase(float* rawdat_p, uint32_t nchan, uint32_t npts, float sr, float* stalocs_p, uint32_t nsta, uint16_t* chanmap_p, vector[uint16_ptr]& tt_ptrs_vec, uint32_t ngrid, int64_t* outbuf, uint32_t nthreads, int debug, string& file_out)
 

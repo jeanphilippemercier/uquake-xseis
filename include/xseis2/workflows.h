@@ -17,61 +17,61 @@
 #include <fftw3.h>
 
 
-namespace xseis {
+namespace xs {
 
 
 void WFSearchOnePhase(Array2D<float>& rdat, float sr, Array2D<float>& stalocs, Vector<uint16_t>& chanmap, VecOfSpans<uint16_t> ttable, int64_t* outbuf, int debug, std::string& npzfile) 
 {	
-	auto logger = xseis::Logger();
+	auto logger = xs::Logger();
 	if (debug > 0) logger.log("Start");
 
 	// PREPROC //////////////////////////////////////////////////////////////
-	auto dat = xseis::ZeroPad(rdat, rdat.ncol() * 2);
+	auto dat = xs::ZeroPad(rdat, rdat.ncol() * 2);
 	if (debug > 0) logger.log("create padded");
 
-	auto fdat = xseis::FFTAndWhiten(dat, sr, {40, 50, 350, 360});
+	auto fdat = xs::FFTAndWhiten(dat, sr, {40, 50, 350, 360});
 	if (debug > 0) logger.log("fft");
-	if (debug == 2) xseis::NpzSave(npzfile, "dat_preproc", dat.rows(), "w");
+	if (debug == 2) xs::NpzSave(npzfile, "dat_preproc", dat.rows(), "w");
 	if (debug == 2) logger.log("save dat");
 
 	// KEYGEN //////////////////////////////////////////////////////////////
-	auto groups = xseis::GroupChannels(chanmap.span());
-	auto keys = xseis::Arange<uint16_t>(0, stalocs.nrow());
-	auto allpairs = xseis::UniquePairs(keys);
+	auto groups = xs::GroupChannels(chanmap.span());
+	auto keys = xs::Arange<uint16_t>(0, stalocs.nrow());
+	auto allpairs = xs::UniquePairs(keys);
 	// auto pairs = allpairs.rows();
-	auto pairs = xseis::DistFiltPairs(allpairs.rows(), stalocs.rows(), 0, 2000);
+	auto pairs = xs::DistFiltPairs(allpairs.rows(), stalocs.rows(), 0, 2000);
 	if (debug > 0) printf("using %lu pairs of %lu total\n", pairs.size(), allpairs.nrow());
 	if (debug > 0) logger.log("build sta pairs");
-	if (debug == 2) xseis::NpzSave(npzfile, "sta_pairs", pairs, "a");
+	if (debug == 2) xs::NpzSave(npzfile, "sta_pairs", pairs, "a");
 	if (debug == 2) logger.log("save sta pairs");
 
 
 	// XCORRS //////////////////////////////////////////////////////////////
 	uint32_t const smooth_cc_wlen = 10;
-	auto ccdat = xseis::Array2D<float>(pairs.size(), dat.ncol());	
-	xseis::XCorrChanGroupsAbs(fdat, groups, pairs, ccdat, smooth_cc_wlen);
+	auto ccdat = xs::Array2D<float>(pairs.size(), dat.ncol());	
+	xs::XCorrChanGroupsAbs(fdat, groups, pairs, ccdat, smooth_cc_wlen);
 	if (debug > 0) logger.log("xcorr");
-	if (debug == 2) xseis::NpzSave(npzfile, "dat_cc", ccdat.rows(), "a");
+	if (debug == 2) xs::NpzSave(npzfile, "dat_cc", ccdat.rows(), "a");
 	if (debug == 2) logger.log("save ccfs");	
 
-	// xseis::IsValidTTable(pairs, ttable, ccdat.ncol());
-	// auto dd = xseis::DistDiffPairs(pairs, stalocs.rows());
-	// std::cout << "max dist_diff: " << xseis::Max(gsl::make_span(dd)) << "\n";
+	// xs::IsValidTTable(pairs, ttable, ccdat.ncol());
+	// auto dd = xs::DistDiffPairs(pairs, stalocs.rows());
+	// std::cout << "max dist_diff: " << xs::Max(gsl::make_span(dd)) << "\n";
 
 	// SEARCH //////////////////////////////////////////////////////////////
-	auto power = xseis::Vector<float>(ttable[0].size());
-	xseis::InterLocBlocks(ccdat.rows(), pairs, ttable, power.span());
+	auto power = xs::Vector<float>(ttable[0].size());
+	xs::InterLocBlocks(ccdat.rows(), pairs, ttable, power.span());
 
-	// auto power = xseis::InterLoc(ccdat.rows(), pairs, ttable);
-	// auto power = xseis::InterLocBad(ccdat.rows(), pairs, ttable);
-	size_t imax = xseis::ArgMax(power.span());
-	float vmax = xseis::Max(power.span());
+	// auto power = xs::InterLoc(ccdat.rows(), pairs, ttable);
+	// auto power = xs::InterLocBad(ccdat.rows(), pairs, ttable);
+	size_t imax = xs::ArgMax(power.span());
+	float vmax = xs::Max(power.span());
 	if (debug > 0) logger.log("interloc");
-	if (debug == 2) xseis::NpzSave(npzfile, "grid_power", power.span(), "a");
+	if (debug == 2) xs::NpzSave(npzfile, "grid_power", power.span(), "a");
 	if (debug == 2) logger.log("save grid");
 
-	auto rmaxes = xseis::RowMaxes(ccdat.rows());
-	float max_theor = xseis::Mean(gsl::make_span(rmaxes));
+	auto rmaxes = xs::RowMaxes(ccdat.rows());
+	float max_theor = xs::Mean(gsl::make_span(rmaxes));
 	// if (debug > 0) logger.log("cc theor max");	
 	float peak_align = vmax / max_theor * 100.0f;
 	if (debug > 0) logger.log("cc maxes");
@@ -82,21 +82,21 @@ void WFSearchOnePhase(Array2D<float>& rdat, float sr, Array2D<float>& stalocs, V
 	std::vector<uint16_t> wtt;
 	for(auto&& row : ttable) wtt.push_back(row[imax]);		
 	if (debug > 0) logger.log("tts to source");
-	if (debug==2) xseis::NpzSave(npzfile, "tts_src", gsl::make_span(wtt), "a");
+	if (debug==2) xs::NpzSave(npzfile, "tts_src", gsl::make_span(wtt), "a");
 	if (debug==2) logger.log("save wtt");
 
-	// xseis::RollAndStack(dat, groups, wtt.span());
-	xseis::Envelope(dat.rows());
+	// xs::RollAndStack(dat, groups, wtt.span());
+	xs::Envelope(dat.rows());
 	if (debug > 0) logger.log("envelope");	
-	xseis::RollSigs(dat.rows(), groups, gsl::make_span(wtt));
+	xs::RollSigs(dat.rows(), groups, gsl::make_span(wtt));
 	if (debug > 0) logger.log("roll");
-	auto stack = xseis::StackSigs(dat.rows());
+	auto stack = xs::StackSigs(dat.rows());
 	if (debug > 0) logger.log("stack");
 	
-	if (debug==2) xseis::NpzSave(npzfile, "dat_rolled", dat.rows(), "a");
-	if (debug==2) xseis::NpzSave(npzfile, "dat_stack", stack.span(), "a");
+	if (debug==2) xs::NpzSave(npzfile, "dat_rolled", dat.rows(), "a");
+	if (debug==2) xs::NpzSave(npzfile, "dat_stack", stack.span(), "a");
 
-	auto otime = xseis::ArgMax(stack.span());
+	auto otime = xs::ArgMax(stack.span());
 	if (debug > 0) printf("[gmax] %f [imax] %lu [ot_imax] %lu\n", vmax, imax, otime);
 
 	outbuf[0] = static_cast<int64_t>(vmax * 10000); // max power scaled
