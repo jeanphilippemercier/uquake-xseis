@@ -47,9 +47,9 @@ void WFSearchOnePhase(Array2D<float>& rdat, float sr, Array2D<float>& stalocs, V
 
 
 	// XCORRS //////////////////////////////////////////////////////////////
-	uint32_t const smooth_cc_wlen = 10;
+	uint32_t const smooth_cc_wlen = 0.005 * sr;
 	auto ccdat = xs::Array2D<float>(pairs.size(), dat.ncol());	
-	xs::XCorrChanGroupsAbs(fdat, groups, pairs, ccdat, smooth_cc_wlen);
+	xs::XCorrCombineChans(fdat, groups, pairs, ccdat, smooth_cc_wlen);
 	if (debug > 0) logger.log("xcorr");
 	if (debug == 2) xs::NpzSave(npzfile, "dat_cc", ccdat.rows(), "a");
 	if (debug == 2) logger.log("save ccfs");	
@@ -87,17 +87,28 @@ void WFSearchOnePhase(Array2D<float>& rdat, float sr, Array2D<float>& stalocs, V
 
 	// xs::RollAndStack(dat, groups, wtt.span());
 	xs::Envelope(dat.rows());
-	if (debug > 0) logger.log("envelope");	
-	xs::RollSigs(dat.rows(), groups, gsl::make_span(wtt));
-	if (debug > 0) logger.log("roll");
-	auto stack = xs::StackSigs(dat.rows());
+	if (debug > 0) logger.log("envelope");
+
+	// get origin time by shifting and stacking, len(stack) = 2 * len(sig)
+	auto stack = xs::RollAndStack(dat.rows(), groups, gsl::make_span(wtt));	
+	int64_t otime = xs::ArgMax(stack.span()) - static_cast<int64_t>(stack.size() / 2);	
 	if (debug > 0) logger.log("stack");
-	
-	if (debug==2) xs::NpzSave(npzfile, "dat_rolled", dat.rows(), "a");
 	if (debug==2) xs::NpzSave(npzfile, "dat_stack", stack.span(), "a");
 
-	auto otime = xs::ArgMax(stack.span());
-	if (debug > 0) printf("[gmax] %f [imax] %lu [ot_imax] %lu\n", vmax, imax, otime);
+	if (debug==2) {
+		xs::RollSigs(dat.rows(), groups, gsl::make_span(wtt));
+		logger.log("roll");
+		xs::NpzSave(npzfile, "dat_rolled", dat.rows(), "a");
+	}
+
+	// xs::RollSigs(dat.rows(), groups, gsl::make_span(wtt));
+	// if (debug > 0) logger.log("roll");
+	// auto stack = xs::StackSigs(dat.rows());
+	// if (debug > 0) logger.log("stack");	
+	// if (debug==2) xs::NpzSave(npzfile, "dat_rolled", dat.rows(), "a");
+	// if (debug==2) xs::NpzSave(npzfile, "dat_stack", stack.span(), "a");
+
+	if (debug > 0) printf("[gmax] %f [imax] %lu [ot_imax] %ld\n", vmax, imax, otime);
 
 	outbuf[0] = static_cast<int64_t>(vmax * 10000); // max power scaled
 	outbuf[1] = imax; // tt grid argmax
@@ -116,15 +127,15 @@ void SearchOnePhase(float* rawdat_p, uint32_t nchan, uint32_t npts, float sr, fl
 	fftwf_import_wisdom_from_filename(&file_wisdom[0]);
 	// std::cout << "file_wisdom: " << file_wisdom << "\n";
 
-	VecOfSpans<uint16_t> ttable;
+	xs::VecOfSpans<uint16_t> ttable;
 	for(auto&& ptr : tt_ptrs) ttable.push_back(gsl::make_span(ptr, ngrid));
 	
-	auto dat = Array2D<float>(rawdat_p, nchan, npts, true); // copies data
-	auto stalocs = Array2D<float>(stalocs_p, nsta, 3, false);
-	auto chanmap = Vector<uint16_t>(chanmap_p, nchan);
+	auto dat = xs::Array2D<float>(rawdat_p, nchan, npts, true); // copies data
+	auto stalocs = xs::Array2D<float>(stalocs_p, nsta, 3, false);
+	auto chanmap = xs::Vector<uint16_t>(chanmap_p, nchan);
 	// auto ttable = Array2D<uint16_t>(ttable_ptr, nsta, ngrid, false);
 
-	WFSearchOnePhase(dat, sr, stalocs, chanmap, ttable, outbuf, debug, npzfile);
+	xs::WFSearchOnePhase(dat, sr, stalocs, chanmap, ttable, outbuf, debug, npzfile);
 	// WFSearchOnePhase(dat, sr, stalocs, chanmap, ttable.rows(), outbuf, npzfile, debug);
 
 	fftwf_export_wisdom_to_filename(&file_wisdom[0]);

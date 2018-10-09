@@ -22,7 +22,7 @@ int main(int argc, char const *argv[])
 
 	uint32_t nthreads = 4;	
 	omp_set_num_threads(nthreads);
-	int debug = 1;
+	int debug = 2;
 
 	auto logger = xs::Logger();
 
@@ -36,8 +36,8 @@ int main(int argc, char const *argv[])
 
 	std::string file_out = HOME + "/data/oyu/synthetic/output.npz";
 	
-	auto hf = xs::H5File(dir_dat + "sim_nll.h5");	
-	// auto hf = xs::H5File(dir_dat + "sim_dat3.h5");	
+	// auto hf = xs::H5File(dir_dat + "sim_nll.h5");	
+	auto hf = xs::H5File(dir_dat + "sim_dat3.h5");	
 	// auto hf = xs::H5File(dir_dat + "sim_nll_noise.h5");	
 	// auto hf = xs::H5File(dir_dat + "real_185101.h5");	
 	auto sr = static_cast<float>(hf.attribute<double>("samplerate"));

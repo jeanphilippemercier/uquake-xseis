@@ -64,12 +64,12 @@ T Min(gsl::span<T> data) {
 }
 
 template<typename T>
-size_t ArgMax(gsl::span<T> data) {
+int64_t ArgMax(gsl::span<T> data) {
 	return std::distance(data.begin(), std::max_element(data.begin(), data.end()));
 }
 
 template<typename T>
-size_t ArgMin(gsl::span<T> data) {
+int64_t ArgMin(gsl::span<T> data) {
 	return std::distance(data.begin(), std::min_element(data.begin(), data.end()));
 }
 
@@ -195,9 +195,9 @@ void TaperCosine(gsl::span<float> sig, uint32_t const len_taper)
 
 
 template<typename T>
-void Multiply(gsl::span<T> data, float val) {
+void Multiply(gsl::span<T> data, float const val) {
 	// Multiply(data.data(), data.size(), val);
-	for(auto&& x : data) x *= val;
+	for(auto& x : data) x *= val;
 }
 
 // void Fill(Complex* data, size_t npts, float val)
@@ -413,7 +413,8 @@ Array2D<Complex32> FFTAndWhiten(Array2D<float>& dat, float const sr, std::vector
 
 
 // ccf for each sta pair = stacked envelopes of inter-channel ccfs
-void XCorrChanGroupsAbs(Array2D<Complex32>& fdat, KeyGroups& groups, VecOfSpans<uint16_t> pairs, Array2D<float>& ccdat, uint32_t wlen_smooth=0) 
+// set smoothin window length to account for uncertainties in vel model
+void XCorrCombineChans(Array2D<Complex32>& fdat, KeyGroups& groups, VecOfSpans<uint16_t> pairs, Array2D<float>& ccdat, uint32_t wlen_smooth=0) 
 {
 	assert((uintptr_t) ccdat.row(1) % MIN_ALIGN == 0);
 	assert((uintptr_t) fdat.row(1) % MIN_ALIGN == 0);
@@ -421,14 +422,13 @@ void XCorrChanGroupsAbs(Array2D<Complex32>& fdat, KeyGroups& groups, VecOfSpans<
 	uint32_t wlen = ccdat.ncol();
 	uint32_t nfreq = fdat.ncol();
 
-	// values to roll ccfs for zero lag in middle (conv in freq domain)
-	auto vshift = BuildPhaseShiftVec(nfreq, wlen / 2);
+	// convolve complex sig with vshift for zero lag at middle sample
+	Vector<Complex32> vshift = BuildPhaseShiftVec(nfreq, wlen / 2);
+	// assumes whitened signals (i.e energy same for all)
 	float energy = Energy(fdat.span(0)) * 2;
-	// std::cout << "energy: " << energy << "\n";
 
 	auto fb = Vector<Complex32>(nfreq); // only used for planning to not destroy fdat
 	auto fptr = reinterpret_cast<fftwf_complex*>(fb.data());	
-	// fftwf_plan plan_c2c = fftwf_plan_dft_1d(wlen, fptr, fptr, FFTW_BACKWARD, FFTW_PATIENCE);
 	fftwf_plan plan_inv = fftwf_plan_dft_c2r_1d(wlen, fptr, ccdat.row(0), FFTW_PATIENCE);
 
 	#pragma omp parallel
@@ -439,31 +439,55 @@ void XCorrChanGroupsAbs(Array2D<Complex32>& fdat, KeyGroups& groups, VecOfSpans<
 
 		#pragma omp for
 		for(size_t i = 0; i < pairs.size(); ++i) {
+
+			auto& pair = pairs[i];
 			auto csig = ccdat.span(i);
 			Fill(csig, 0.0f);
 
 			uint32_t nstack = 0;
-			auto pair = pairs[i];
+
 			for(auto&& k0 : groups[pair[0]]) {
 				for(auto&& k1 : groups[pair[1]]) {
 					XCorr(fdat.row(k0), fdat.row(k1), fbuf.data(), fbuf.size());
-					Convolve(&vshift[0], fbuf.data(), fbuf.size());
+					Convolve(vshift.data(), fbuf.data(), fbuf.size());
 					fftwf_execute_dft_c2r(plan_inv, fptr, buf.data());
 					Multiply(buf.span(), 1.0f / energy);
-					for(size_t j=0; j < buf.size(); ++j) csig[j] += std::abs(buf[j]);	
-					nstack++;
+					for(size_t j=0; j < buf.size(); ++j) {
+						csig[j] += std::abs(buf[j]);
+					}		
+					nstack++;					
 				}
 			}
-			// Multiply(csig, wlen, 1.0f / static_cast<float>(nstack));		
 			Multiply(csig, 1.0f / static_cast<float>(nstack));
-			// uint32_t zlen = 10;
-			// for(size_t k = wlen / 2 - zlen; k < wlen / 2 + zlen; ++k) csig[k] = 0;
 			Copy(csig, buf.span());
 			if(wlen_smooth != 0) SlidingWinMax(buf.span(), csig, wlen_smooth);
 		}
 	}
 }
 
+
+// Stack buffer is twice length of signal to prevent rollover
+// argmax_true = argmax(stack) - len(stack) / 2
+Vector<float> RollAndStack(VecOfSpans<float> const signals, const KeyGroups& groups, gsl::span<uint16_t> const shifts) 
+{	
+	uint32_t npts = signals[0].size();
+	auto stack = Vector<float>(npts * 2);
+	Fill(stack.span(), 0.0f);
+
+	for(size_t i = 0; i < groups.size(); ++i)
+	{
+		int rollby = static_cast<int>(shifts[i]);
+
+		for(auto& key : groups[i])
+		{
+			float* out = &stack[npts] - rollby;
+			Accumulate(signals[key].data(), out, signals[key].size());
+		}
+	}
+
+	Multiply(stack.span(), 1.0f / signals.size());
+	return stack;
+}
 
 void RollSigs(VecOfSpans<float> signals, const KeyGroups& groups, gsl::span<uint16_t> const shifts) 
 {	

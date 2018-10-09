@@ -12,7 +12,7 @@
 #define _USE_MATH_DEFINES
 #include <cmath>
 
-// #define GSL_UNENFORCED_ON_CONTRACT_VIOLATION
+#define GSL_UNENFORCED_ON_CONTRACT_VIOLATION
 #include "gsl/span"
 
 

@@ -69,10 +69,11 @@ with np.load(npz_file, mmap_mode='r') as npz:
 # xplot3d.power(gpower, gdef, stalocs, lmax=lmax)
 xplot3d.power(gpower, gdef, stalocs[ikeep], labels=stations)
 
-
 xplot.im(droll, labels=['sample (samplerate=%d)' % dsr, 'channel'])
-plt.plot(stack / np.max(stack) * droll.shape[0] / 5, color='red')
-plt.title('synthetic data rolled for P')
+dstack = np.mean(droll, axis=0)
+plt.plot(dstack / np.max(dstack) * droll.shape[0] / 5, color='red')
+plt.title('Data rolled based on event')
+
 
 # ttwin = (ttP_keep[:, out[1]]).astype(int)
 # print(np.allclose(ttwin, wtt))
