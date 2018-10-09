@@ -13,6 +13,7 @@ setup(ext_modules=cythonize(Extension(
            extra_link_args=["-fopenmp"],
            libraries=['fftw3', 'fftw3f', 'fftw3l', 'fftw3_threads', 'fftw3f_threads', 'fftw3l_threads', 'cnpy'],
            include_dirs=[np.get_include(), 'include'],
+           library_dirs=['../lib']
       )))
 
 # time g++-7 $fullfile -std=c++17 -Wall -o temp -O3 -march=native -ffast-math -lhdf5_serial -lhdf5_cpp -pthread -lfftw3f -lm -fopenmp -lstdc++fs -lcnpy -lz && time ./temp

@@ -29,7 +29,7 @@ void WFSearchOnePhase(Array2D<float>& rdat, float sr, Array2D<float>& stalocs, V
 	auto dat = xseis::ZeroPad(rdat, rdat.ncol() * 2);
 	if (debug > 0) logger.log("create padded");
 
-	auto fdat = xseis::WhitenAndFFT(dat, sr, {40, 50, 350, 360});
+	auto fdat = xseis::FFTAndWhiten(dat, sr, {40, 50, 350, 360});
 	if (debug > 0) logger.log("fft");
 	if (debug == 2) xseis::NpzSave(npzfile, "dat_preproc", dat.rows(), "w");
 	if (debug == 2) logger.log("save dat");

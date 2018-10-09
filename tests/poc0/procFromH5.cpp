@@ -37,6 +37,7 @@ int main(int argc, char const *argv[])
 	std::string file_out = HOME + "/data/oyu/synthetic/output.npz";
 	
 	auto hf = xseis::H5File(dir_dat + "sim_nll.h5");	
+	// auto hf = xseis::H5File(dir_dat + "sim_dat3.h5");	
 	// auto hf = xseis::H5File(dir_dat + "sim_nll_noise.h5");	
 	// auto hf = xseis::H5File(dir_dat + "real_185101.h5");	
 	auto sr = static_cast<float>(hf.attribute<double>("samplerate"));

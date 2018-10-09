@@ -437,7 +437,8 @@ def filter(data, btype, band, sr, corners=4, zerophase=True):
 		return sosfilt(sos, data)
 
 
-def decimate(data, sr, factor):
+def decimate(data_in, sr, factor):
+	data = data_in.copy()
 	fmax = sr / (factor * 2)
 	filter(data, 'lowpass', fmax, sr)
 	if len(data.shape) == 1:

@@ -1,25 +1,22 @@
-import numpy as np
-# import os
-import matplotlib.pyplot as plt
-# import glob
 from importlib import reload
+import numpy as np
+import matplotlib.pyplot as plt
+# import os
+# import glob
 # import datetime
 # from mayavi import mlab
 from obspy import read
 from xseis2 import xspy
 from xseis2 import xflow
-
 from xseis2 import xutil
 from xseis2 import xplot
 from xseis2 import xplot3d
-# from xseis import xobs
-
 plt.ion()
 
+
 ddir = "/home/phil/data/oyu/synthetic/"
-mseed_file = ddir + 'sim_dat.mseed'
-# mseed_file = ddir + 'sim_dat2.mseed'
-# mseed_file = '/home/phil/data/oyu/sim_dat2.mseed'
+# mseed_file = ddir + 'sim_dat.mseed'
+mseed_file = ddir + 'sim_dat3.mseed'
 npz_file = ddir + 'output.npz'
 tts_path = '/home/phil/data/oyu/NLLOC_grids/'
 
@@ -27,8 +24,7 @@ tts_path = '/home/phil/data/oyu/NLLOC_grids/'
 nthreads = int(4)
 debug = int(2)
 dsr = float(3000.)
-wlen_sec = 1.0
-# wlen_fixed = int(1 * dsr)
+wlen_sec = float(1.0)
 
 ttable, stalocs, namedict, gdef = xutil.ttable_from_nll_grids(tts_path, key="OT.P")
 # ttable, stalocs, namedict, gdef = xutil.ttable_from_nll_grids(tts_path, key="OT.S")
@@ -54,7 +50,6 @@ ot_epoch = (t0 + iot / dsr).datetime.timestamp()
 reload(xflow)
 msg, key = xflow.encode_for_kafka(ot_epoch, lmax, vmax)
 
-print(lmax)
 true_loc = np.array([651600, 4767420, 200])
 print('correct loc: ', np.allclose(lmax, true_loc))
 

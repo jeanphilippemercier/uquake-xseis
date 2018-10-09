@@ -380,8 +380,8 @@ Vector<float> SumRows(VecOfSpans<float> dat)
 }
 
 
-
-Array2D<Complex32> WhitenAndFFT(Array2D<float>& dat, float const sr, std::vector<float> cfreqs, float const taper_len=0.02) 
+// Forward fft of data and whitens between corner freqs, data is modified
+Array2D<Complex32> FFTAndWhiten(Array2D<float>& dat, float const sr, std::vector<float> cfreqs, float const taper_len=0.02) 
 {
 	size_t const nchan = dat.nrow();
 	size_t const wlen = dat.ncol();
@@ -390,7 +390,6 @@ Array2D<Complex32> WhitenAndFFT(Array2D<float>& dat, float const sr, std::vector
 
 	auto fdat = Array2D<Complex32>(nchan, nfreq);
 	auto filter = BuildFreqFilter(cfreqs, nfreq, sr);
-	// float energy = Energy(filter.span()) * 2;
 
 	auto buf = Vector<float>(wlen);
 	auto fptr = reinterpret_cast<fftwf_complex*>(fdat.row(0));	
@@ -399,12 +398,13 @@ Array2D<Complex32> WhitenAndFFT(Array2D<float>& dat, float const sr, std::vector
 
 	#pragma omp parallel for
 	for(size_t i = 0; i < dat.nrow(); ++i) {
-		auto fptr = reinterpret_cast<fftwf_complex*>(fdat.row(i));
-		fftwf_execute_dft_r2c(plan_fwd, dat.row(i), fptr);
-		ApplyFreqFilterReplace(filter.span(), fdat.span(i)); // apply whiten
-		fftwf_execute_dft_c2r(plan_inv, fptr, dat.row(i));
 		TaperCosine(dat.span(i), taper_nsamp);
-		Multiply(dat.span(i), 1.0f / static_cast<float>(wlen));
+		auto fptr = reinterpret_cast<fftwf_complex*>(fdat.row(i));
+		fftwf_execute_dft_r2c(plan_fwd, dat.row(i), fptr); // fwd fft
+		ApplyFreqFilterReplace(filter.span(), fdat.span(i)); // apply whiten
+		fftwf_execute_dft_c2r(plan_inv, fptr, dat.row(i)); // inv fft
+		TaperCosine(dat.span(i), taper_nsamp); 
+		Multiply(dat.span(i), 1.0f / static_cast<float>(wlen)); // fix fftw3 scaling
 		fftwf_execute_dft_r2c(plan_fwd, dat.row(i), fptr);
 	}
 
