@@ -6,6 +6,9 @@
 # pull cnpy dependency
 git submodule update --init
 pip install --user .
+
+# in ubuntu you might depend on g++7 or higher
+CXX=g++-7 pip install --user .
 ```
 
 ## Python dependencies
