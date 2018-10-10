@@ -3,6 +3,8 @@
 ## Build
 
 ```bash
+# pull cnpy dependency
+git submodule update --init
 pip install --user .
 ```
 
