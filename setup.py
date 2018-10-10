@@ -10,10 +10,10 @@ from Cython.Distutils import build_ext
 
 libcnpy = ('cnpy', {'sources': ['cnpy/cnpy.cpp']})
 
-ext_modules = [
+ext_modules = cythonize([
     Extension(
-        "xseis2",  # the extension name
-        sources=["xseis/xspy.pyx"],  # the Cython, cpp source
+        "xseis2.xspy",  # the extension name
+        sources=["cython/xspy.pyx"],  # the Cython, cpp source
         language="c++",
         extra_compile_args=[
             "-std=c++17", "-O3", "-Wall", "-fno-wrapv", "-fno-strict-aliasing",
@@ -29,10 +29,9 @@ ext_modules = [
             'fftw3', 'fftw3f', 'fftw3l', 'fftw3_threads', 'fftw3f_threads',
             'fftw3l_threads', 'z'
         ],
-        include_dirs=[np.get_include(), 'xseis/include'],
+        include_dirs=[np.get_include(), 'cython/include'],
     )
-]
-
+])
 
 def main():
     setup(
@@ -42,6 +41,7 @@ def main():
             'build_clib': build_clib,
             'build_ext': build_ext
         },
+        packages=['xseis2'],
         ext_modules=ext_modules)
 
 
