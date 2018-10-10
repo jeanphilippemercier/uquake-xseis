@@ -12,13 +12,13 @@ libcnpy = ('cnpy', {'sources': ['cnpy/cnpy.cpp']})
 
 ext_modules = [
     Extension(
-        "xspy",  # the extension name
+        "xseis2",  # the extension name
         sources=["xseis/xspy.pyx"],  # the Cython, cpp source
         language="c++",
         extra_compile_args=[
             "-std=c++17", "-O3", "-Wall", "-fno-wrapv", "-fno-strict-aliasing",
             "-lfftw3f", "-lm", "-pthread", "-march=native", "-ffast-math",
-            "-lm", "-fopenmp", "-lz"
+            "-lm", "-fopenmp", "-lz", "-lzip"
         ],
         extra_link_args=["-fopenmp"],
         cmdclass={
@@ -27,7 +27,7 @@ ext_modules = [
         },
         libraries=[
             'fftw3', 'fftw3f', 'fftw3l', 'fftw3_threads', 'fftw3f_threads',
-            'fftw3l_threads'
+            'fftw3l_threads', 'z'
         ],
         include_dirs=[np.get_include(), 'xseis/include'],
     )
@@ -36,7 +36,7 @@ ext_modules = [
 
 def main():
     setup(
-        name='xspy',
+        name='xseis2',
         libraries=[libcnpy],
         cmdclass={
             'build_clib': build_clib,
