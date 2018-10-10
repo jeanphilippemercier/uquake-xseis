@@ -1,0 +1,3 @@
+[submodule "cnpy"]
+	path = cnpy
+	url = http://seismic-gitlab.eastus.cloudapp.azure.com/rio-tinto/cnpy
