@@ -13,7 +13,7 @@ libcnpy = ('cnpy', {'sources': ['cnpy/cnpy.cpp']})
 ext_modules = cythonize([
     Extension(
         "xseis2.xspy",  # the extension name
-        sources=["cython/xspy.pyx"],  # the Cython, cpp source
+        sources=["xseis2/xspy.pyx"],  # the Cython, cpp source
         language="c++",
         extra_compile_args=[
             "-std=c++17", "-O3", "-Wall", "-fno-wrapv", "-fno-strict-aliasing",
@@ -29,7 +29,7 @@ ext_modules = cythonize([
             'fftw3', 'fftw3f', 'fftw3l', 'fftw3_threads', 'fftw3f_threads',
             'fftw3l_threads', 'z'
         ],
-        include_dirs=[np.get_include(), 'cython/include'],
+        include_dirs=[np.get_include(), 'xseis2/include'],
     )
 ])
 
