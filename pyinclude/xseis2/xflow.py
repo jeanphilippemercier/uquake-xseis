@@ -2,7 +2,7 @@
 # @Author: Philippe Dales
 # @Date:   2018-10-02 13:16:23
 # @Last Modified by:   Philippe Dales
-# @Last Modified time: 2018-10-08 15:25:14
+# @Last Modified time: 2018-10-10 15:00:26
 import numpy as np
 import struct
 from xseis2 import xutil
@@ -66,3 +66,18 @@ def parse_event_xml(fle):
 	loc[2] = vals.find("{MICROQUAKE}LOCATION_Z").text
 
 	return loc
+
+
+def split_mseed(st, wlen):
+	from obspy import Stream, Trace
+	npts = len(st[0].data)
+	nchunks = int(npts / wlen)
+	for i in range(nchunks):
+		stnew = Stream()
+		# stmp = st.copy()
+		for tr in st:
+			trnew = Trace()
+			trnew.stats = tr.stats
+
+	
+
