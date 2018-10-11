@@ -1,4 +1,4 @@
-import os
+from setuptools import find_packages
 from distutils.command.build_clib import build_clib
 from distutils.core import Extension, setup
 
@@ -21,10 +21,6 @@ ext_modules = cythonize([
             "-lm", "-fopenmp", "-lz", "-lzip"
         ],
         extra_link_args=["-fopenmp"],
-        cmdclass={
-            'build_clib': build_clib,
-            'build_ext': build_ext
-        },
         libraries=[
             'fftw3', 'fftw3f', 'fftw3l', 'fftw3_threads', 'fftw3f_threads',
             'fftw3l_threads', 'z'
@@ -32,6 +28,7 @@ ext_modules = cythonize([
         include_dirs=[np.get_include(), 'xseis2/include'],
     )
 ])
+
 
 def main():
     setup(
@@ -41,7 +38,7 @@ def main():
             'build_clib': build_clib,
             'build_ext': build_ext
         },
-        packages=['xseis2'],
+        packages=find_packages(exclude=['tests']),
         ext_modules=ext_modules)
 
 
