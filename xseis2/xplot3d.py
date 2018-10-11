@@ -10,11 +10,11 @@ from mayavi import mlab
 # import subprocess
 # import h5py
 # import glob
-from xseis import xutil
+from xseis2 import xutil
 
 
 def mlab_contour(g, ncont=10, vfmin=0.1, vfmax=0.1, ranges=None, vlims=None, cbar=True):
-	
+
 	if vlims is None:
 		gmin, gmax, p2p = xutil.MinMax(g)
 		vmin, vmax = gmin + p2p * vfmin, gmax - vfmax * p2p

@@ -11,7 +11,7 @@ import numpy as np
 import os
 from scipy import fftpack
 from scipy.fftpack import fft, ifft, rfft, fftfreq
-from xseis import xutil
+from xseis2 import xutil
 
 from matplotlib.pyplot import rcParams
 rcParams['figure.figsize'] = 11, 8
@@ -60,7 +60,7 @@ def ccf(d, sr=None):
 		plt.plot(x, d)
 		plt.xlabel("Lag time (sample)")
 	plt.ylabel("Corr")
-		
+
 
 def v2color(vals):
 
@@ -165,7 +165,7 @@ def im_ax(d, ax, norm=True, cmap='viridis', aspect='auto', extent=None):
 	if extent is not None:
 		ax.set_xlim(extent[:2])
 		ax.set_ylim(extent[2:])
-	
+
 
 def freq_compare(sigs, sr, xlim=None):
 
@@ -227,7 +227,7 @@ def angle(sig, sr, xlim=None):
 		plt.xlim(xlim)
 	else:
 		plt.xlim([0, sr / 2.])
-		
+
 	plt.xlabel('Freq (Hz)')
 	plt.show()
 
