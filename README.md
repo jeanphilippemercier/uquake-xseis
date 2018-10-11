@@ -8,7 +8,7 @@ git submodule update --init
 pip install --user .
 
 # in ubuntu you might depend on g++7 or higher
-CXX=g++-7 pip install --user .
+CC=g++-7 CXX=g++-7 CFLAGS="-I/usr/include/hdf5/serial" pip install --user .
 ```
 
 ## Python dependencies
