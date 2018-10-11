@@ -10,7 +10,7 @@ from xseis2 import xspy
 from xseis2 import xflow
 from xseis2 import xutil
 from xseis2 import xplot
-from xseis2 import xplot3d
+# from xseis2 import xplot3d
 plt.ion()
 
 

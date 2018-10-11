@@ -19,7 +19,6 @@
 
 namespace xs {
 
-
 void WFSearchOnePhase(Array2D<float>& rdat, float sr, Array2D<float>& stalocs, Vector<uint16_t>& chanmap, VecOfSpans<uint16_t> ttable, int64_t* outbuf, int debug, std::string& npzfile) 
 {	
 	auto logger = xs::Logger();
@@ -122,8 +121,9 @@ void SearchOnePhase(float* rawdat_p, uint32_t nchan, uint32_t npts, float sr, fl
 {
 
 	omp_set_num_threads(nthreads);
-	std::string const XSHOME = std::getenv("XSHOME");
-	std::string file_wisdom = XSHOME + "/data/fftw3_wisdom.txt";
+	// std::string const XSHOME = std::getenv("XSHOME");
+	// std::string file_wisdom = XSHOME + "/data/fftw3_wisdom.txt";
+	std::string file_wisdom = "fftw3_wisdom.txt";
 	fftwf_import_wisdom_from_filename(&file_wisdom[0]);
 	// std::cout << "file_wisdom: " << file_wisdom << "\n";
 

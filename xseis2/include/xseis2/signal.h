@@ -572,6 +572,14 @@ float MADMax(gsl::span<float> power, uint32_t scale=1) {
 }
 
 
+// void FFTWImportWisdom()
+// {
+ 
+// std::string wisdom = " ";
+// // fftwf_import_wisdom_from_string
+// }
+
+
 
 // Array2D<Complex32> WhitenAndFFTPadDec2x(Array2D<float>& dat, float& sr, std::vector<float> cfreqs, float taper_len=0.02) 
 // {

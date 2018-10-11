@@ -42,7 +42,10 @@ source ~/.profile
 cd xseis/cython
 bash compile.sh
 
+# CC=gcc python setup.py build
+C++=g++-7 python setup.py build
 
+CC=g++-7 CXX=g++-7 pip install  .
 
 
 
