@@ -122,6 +122,13 @@ void AbsCopy(gsl::span<Complex32> const in, gsl::span<float> out)
 }
 
 
+template<typename T>
+void Absolute(gsl::span<T> data) {
+	for(auto& x : data) x = std::abs(x);
+}
+
+
+
 // void NormCopy(gsl::span<Complex32> const in, gsl::span<float> out)
 // {	
 // 	// #pragma omp simd aligned(sig:MIN_ALIGN)
@@ -461,6 +468,59 @@ void XCorrCombineChans(Array2D<Complex32>& fdat, KeyGroups& groups, VecOfSpans<u
 			Multiply(csig, 1.0f / static_cast<float>(nstack));
 			Copy(csig, buf.span());
 			if(wlen_smooth != 0) SlidingWinMax(buf.span(), csig, wlen_smooth);
+		}
+	}
+}
+
+
+// ccf for each sta pair = stacked envelopes of inter-channel ccfs
+// set smoothin window length to account for uncertainties in vel model
+void XCorrChans(Array2D<Complex32>& fdat, VecOfSpans<uint16_t> pairs, Array2D<float>& ccdat, uint32_t wlen_smooth=0) 
+{
+	assert((uintptr_t) ccdat.row(1) % MIN_ALIGN == 0);
+	assert((uintptr_t) fdat.row(1) % MIN_ALIGN == 0);
+
+	uint32_t wlen = ccdat.ncol();
+	uint32_t nfreq = fdat.ncol();
+
+	// convolve complex sig with vshift for zero lag at middle sample
+	Vector<Complex32> vshift = BuildPhaseShiftVec(nfreq, wlen / 2);
+	// assumes whitened signals (i.e energy same for all)
+	float energy = Energy(fdat.span(0)) * 2;
+
+	auto fb = Vector<Complex32>(nfreq); // only used for planning to not destroy fdat
+	auto fptr = reinterpret_cast<fftwf_complex*>(fb.data());	
+	fftwf_plan plan_inv = fftwf_plan_dft_c2r_1d(wlen, fptr, ccdat.row(0), FFTW_PATIENCE);
+
+	#pragma omp parallel
+	{
+		auto buf = Vector<float>(wlen);
+		auto fbuf = Vector<Complex32>(nfreq);
+		auto fptr = reinterpret_cast<fftwf_complex*>(fbuf.data());
+
+		#pragma omp for
+		for(size_t i = 0; i < pairs.size(); ++i) {
+
+			auto k0 = pairs[i][0];
+			auto k1 = pairs[i][1];
+			
+			XCorr(fdat.row(k0), fdat.row(k1), fbuf.data(), fbuf.size());
+			Convolve(vshift.data(), fbuf.data(), fbuf.size());
+			fftwf_execute_dft_c2r(plan_inv, fptr, buf.data());
+			Multiply(buf.span(), 1.0f / energy);
+
+			auto csig = ccdat.span(i);
+			// Fill(csig, 0.0f);
+			// Copy(csig, buf.span());
+			if(wlen_smooth == 0)
+			{
+				Copy(buf.span(), csig);				
+			}
+			else
+			{
+				Absolute(buf.span());
+				SlidingWinMax(buf.span(), csig, wlen_smooth);
+			}
 		}
 	}
 }

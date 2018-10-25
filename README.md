@@ -5,10 +5,11 @@
 ```bash
 # pull cnpy dependency
 git submodule update --init
-pip install --user .
+# pip install --user .
 
 # in ubuntu you might depend on g++7 or higher
-CC=g++-7 CXX=g++-7 CFLAGS="-I/usr/include/hdf5/serial" pip install --user .
+# CC=g++-7 CXX=g++-7 CFLAGS="-I/usr/include/hdf5/serial" pip install --user .
+CC=g++-8 CXX=g++-8 CFLAGS="-I/usr/include/hdf5/serial" pip install --user .
 ```
 
 ## Python dependencies

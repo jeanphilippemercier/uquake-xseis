@@ -30,14 +30,14 @@ int main(int argc, char const *argv[])
 	std::string const HOME = std::getenv("HOME");
 	std::string dir_dat = HOME + "/data/oyu/synthetic/";
 	std::string const XSHOME = std::getenv("XSHOME");
-	std::string file_wisdom = XSHOME + "/data/fftw3_wisdom.txt";
+	std::string file_wisdom = XSHOME + "/fftw3_wisdom.txt";
 	fftwf_import_wisdom_from_filename(&file_wisdom[0]);
 	std::cout << "file_wisdom: " << file_wisdom << "\n";
 
 	std::string file_out = HOME + "/data/oyu/synthetic/output.npz";
 	
-	// auto hf = xs::H5File(dir_dat + "sim_nll.h5");	
-	auto hf = xs::H5File(dir_dat + "sim_dat3.h5");	
+	auto hf = xs::H5File(dir_dat + "sim_nll.h5");	
+	// auto hf = xs::H5File(dir_dat + "sim_dat3.h5");	
 	// auto hf = xs::H5File(dir_dat + "sim_nll_noise.h5");	
 	// auto hf = xs::H5File(dir_dat + "real_185101.h5");	
 	auto sr = static_cast<float>(hf.attribute<double>("samplerate"));

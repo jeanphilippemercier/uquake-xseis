@@ -130,4 +130,33 @@ def power_lims(output, gdef, stalocs=None, lmax=None, lines=None, labels=None):
 			mlab.plot3d(x, y, z, tube_radius=0.2, color=lclr)
 
 
+def power_new(output, gdef, stalocs=None, labels=None, lines=None, lmax=None, title=None, vfmin=0.1, vfmax=0.005):
 
+	lims, spacing = gdef[:6], gdef[6]
+	shape = (np.diff(lims)[::2] // spacing).astype(int)
+	grid = output.reshape(shape)
+	origin = lims[::2]
+
+	fig = mlab.figure(size=(1000, 901))
+	ranges = list(lims.flatten())
+	src = mlab_contour(grid, ncont=8, vfmin=vfmin, vfmax=vfmax, ranges=ranges)
+	# x, y, z = (sloc - origin) / spacing
+	if stalocs is not None:
+		x, y, z = (stalocs - origin).T / spacing
+		mlab.points3d(x, y, z, color=(1, 0, 0), scale_factor=1.0)
+		if labels is not None:
+			for i, lbl in enumerate(labels):
+				x, y, z = (stalocs[i] - origin) / spacing
+				mlab.text3d(x, y, z, str(lbl))
+
+	if lmax is not None:
+		x, y, z = (lmax - origin) / spacing
+		mlab.points3d(x, y, z, color=(0, 0, 0), scale_factor=2.0)
+
+	lclr = (0.1, 0.1, 0.1)
+	if lines is not None:
+		for i, line in enumerate(lines):
+			x, y, z = (line - origin).T / spacing
+			mlab.plot3d(x, y, z, tube_radius=0.2, color=lclr)
+	if title is not None:
+		mlab.title(title, size=0.5)

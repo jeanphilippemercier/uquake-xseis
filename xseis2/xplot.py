@@ -17,6 +17,38 @@ from matplotlib.pyplot import rcParams
 rcParams['figure.figsize'] = 11, 8
 
 
+def moveout(dat, dists, sr=1, scale=20):
+
+	fig = plt.figure(figsize=(10, 10))
+	ax = fig.add_subplot(111)
+
+	dshift = xutil.norm2d(dat) * 20 + dists[:, np.newaxis]
+
+	dlines = ax.plot(dshift.T, alpha=0.3, color='black')
+	dline = dlines[0]
+	plt.title("sr: %.2f" % sr)
+	plt.xlabel('time (sample)')
+	plt.ylabel('dist (m)')
+	lpick = []
+
+	def handler(event):
+		lpick.append([event.xdata, event.ydata])
+		x, y = lpick[-1]
+		# print("%d, %d" % (x, y))
+		ax.scatter(x, y, s=30)
+		if len(lpick) == 2:
+			xv, yv = np.array(lpick).T
+			xd = xv[1] - xv[0]
+			yd = yv[1] - yv[0]
+			vel = yd / xd * sr
+			ax.plot(xv, yv)
+			ax.text(x, y, "%d" % vel, size=20, color='red')
+			lpick.clear()
+		dline.figure.canvas.draw()
+
+	cid = dline.figure.canvas.mpl_connect('key_press_event', handler)
+
+
 def chan_groups(d, groups, shifts=None, labels=None, **kwargs):
 	nsta = len(groups)
 	if shifts is None:

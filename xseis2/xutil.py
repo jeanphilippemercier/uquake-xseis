@@ -16,6 +16,14 @@ import glob
 # from scipy.signal import sosfilt, zpk2sos, iirfilter
 
 
+def ricker(freq, sr, length=0.2):
+	f = freq
+	dt = 1. / sr
+	t = np.arange(-length / 2, (length - dt) / 2, dt)
+	y = (1.0 - 2.0*(np.pi**2)*(f**2)*(t**2)) * np.exp(-(np.pi**2)*(f**2)*(t**2))
+	return t, y
+
+
 def sizemb(nfloat):
 	size = nfloat * 4.0 / 1024**2
 	print("%d float = %.2f mb" % (nfloat, size))
@@ -88,6 +96,22 @@ def gdef_to_points(gdef):
 	z = np.arange(origin[2], maxes[2], spacing).astype(np.float32)
 	points = np.zeros((np.product(shape), 3), dtype=np.float32)
 	# points = np.stack(np.meshgrid(x, y, z), 3).reshape(3, -1).astype(np.float32)
+	ix = 0
+	for xv in x:
+		for yv in y:
+			for zv in z:
+				points[ix] = [xv, yv, zv]
+				ix += 1
+	return points
+
+
+def points2d(x, y):
+	return np.transpose([np.tile(x, len(y)), np.repeat(y, len(x))])
+
+
+def points3d(x, y, z):
+	size = len(x) * len(y) * len(z)
+	points = np.zeros((size, 3), dtype=np.float32)
 	ix = 0
 	for xv in x:
 		for yv in y:
@@ -170,6 +194,17 @@ def roll_data(data, tts):
 	for i, sig in enumerate(data):
 		droll[i] = np.roll(sig, -tts[i])
 	return droll
+
+
+def velstack(data, dists2src, sr, vels):
+
+	dnorm = norm2d(data)
+	dstack = np.zeros((len(vels), dnorm.shape[1]), dtype=np.float32)
+	for ivel, vel in enumerate(vels):
+		shifts = (dists2src / vel * sr + 0.5).astype(int)
+		for i, shift in enumerate(shifts):
+			dstack[ivel] += np.roll(dnorm[i], -shift)
+	return dstack
 
 
 def chan_groups(chanmap):
@@ -579,16 +614,19 @@ def mirror_freqs(data):
 
 
 def taper_data(data, wlen):
-	tap = taper_cosine(wlen)
+	# tap = taper_cosine(wlen)
+	tap = hann_half(wlen)
 	data[:wlen] *= tap
 	data[-wlen:] *= tap[::-1]
 
 
 def taper2d(data, wlen):
-	tap = taper_cosine(wlen)
+	out = data.copy()
+	tap = hann_half(wlen)
 	for i in range(data.shape[0]):
-		data[i][:wlen] *= tap
-		data[i][-wlen:] *= tap[::-1]
+		out[i][:wlen] *= tap
+		out[i][-wlen:] *= tap[::-1]
+	return out
 
 
 def amax_cc(sig):
@@ -600,17 +638,94 @@ def angle(a, b):
 	return np.arctan2((a[1] - b[1]), (a[0] - b[0]))
 
 
+def add_noise(a, freqs, sr, scale, taplen=0.05):
+	out = a.copy()
+
+	nsig, npts = a.shape
+	fwin = freq_window(freqs, npts, sr)
+	nfreq = len(fwin)
+
+	for i in range(nsig):
+		fb = np.zeros(npts, dtype=np.complex64)
+
+		phases = np.random.rand(nfreq) * 2 * np.pi
+		phases = np.cos(phases) + 1j * np.sin(phases)
+
+		fb[: nfreq] = phases * fwin
+		fb[-nfreq + 1:] = fb[1:nfreq].conjugate()[::-1]
+		# a[i] = np.real(ifft(fb))
+		out[i] += np.real(ifft(fb)) * scale
+	taper2d(out, int(taplen * npts))
+
+	return out
+
+
+def zeropad2d(a, npad):
+	nrow, ncol = a.shape
+	out = np.zeros((nrow, ncol + npad), dtype=a.dtype)
+	out[:, :ncol] = a
+	return out
+
+
+def zero_argmax(a, wlen, taplen=0.05):
+	# handles edges incorrectly
+	npts = a.shape[1]
+	taper = hann_half(int(taplen * wlen))
+	win = np.concatenate((taper[::-1], np.zeros(wlen), taper))
+	hl = int(len(win) // 2)
+	out = a.copy()
+	imaxes = np.argmax(np.abs(out), axis=1)
+	for i, imax in enumerate(imaxes):
+		i0 = imax - hl
+		i1 = imax + hl
+		if i0 <= 0:
+			out[i, 0:i1] *= win[abs(i0):]
+		elif i1 > npts:
+			out[i, i0:] *= win[:-(i1 - npts)]
+		else:
+			out[i, i0:i1] *= win
+
+	return out
+
+
+def hann(npts):
+	return 0.5 - 0.5 * np.cos(2.0 * np.pi * np.arange(npts) / (npts - 1))
+
+
+def hann_half(npts):
+	return hann(npts * 2)[:npts]
+
+# def whiten(sig, win):
+# 	"""Whiten signal, modified from MSNoise."""
+# 	npts = len(sig)
+# 	nfreq = int(npts // 2 + 1)
+
+# 	assert(len(win) == nfreq)
+# 	# fsr = npts / sr
+
+# 	fsig = fft(sig)
+# 	# hl = nfreq // 2
+
+# 	half = fsig[: nfreq]
+# 	half = win * phase(half)
+# 	fsig[: nfreq] = half
+# 	fsig[-nfreq + 1:] = half[1:].conjugate()[::-1]
+
+# 	return np.real(ifft(fsig))
+
+
 def fftnoise(f):
 	f = np.array(f, dtype='complex')
-	Np = (len(f) - 1) // 2
-	phases = np.random.rand(Np) * 2 * np.pi
+	npts = (len(f) - 1) // 2
+	phases = np.random.rand(npts) * 2 * np.pi
 	phases = np.cos(phases) + 1j * np.sin(phases)
-	f[1:Np + 1] *= phases
-	f[-1:-1 - Np:-1] = np.conj(f[1:Np + 1])
+	f[1:npts + 1] *= phases
+	f[-1:-1 - npts:-1] = np.conj(f[1:npts + 1])
 	return ifft(f).real
 
 
-def band_noise(freqmin, freqmax, samples, sr):
+def band_noise(band, sr, samples):
+	freqmin, freqmax = band
 	freqs = np.abs(fftfreq(samples, 1. / sr))
 	f = np.zeros(samples)
 	idx = np.where(np.logical_and(freqs >= freqmin, freqs <= freqmax))[0]
@@ -618,11 +733,11 @@ def band_noise(freqmin, freqmax, samples, sr):
 	return fftnoise(f)
 
 
-def add_noise(data, band, sr, power):
+def add_noise2(data, band, sr, power):
 	freqmin, freqmax = band
 	samples = data.shape[1]
 	for d in data:
-		d += band_noise(freqmin, freqmax, samples, sr) * power
+		d += band_noise(band, sr, samples) * power
 
 
 def envelope(data):
