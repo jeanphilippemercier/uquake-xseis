@@ -17,7 +17,7 @@ from matplotlib.pyplot import rcParams
 rcParams['figure.figsize'] = 11, 8
 
 
-def moveout(dat, dists, sr=1, scale=20):
+def moveout(dat, dists, sr=1, scale=20, picks=None):
 
 	fig = plt.figure(figsize=(10, 10))
 	ax = fig.add_subplot(111)
@@ -29,6 +29,12 @@ def moveout(dat, dists, sr=1, scale=20):
 	plt.title("sr: %.2f" % sr)
 	plt.xlabel('time (sample)')
 	plt.ylabel('dist (m)')
+
+	if picks is not None:
+		for i, pick in enumerate(picks):
+			plt.scatter(pick, dists, s=50,
+				 marker='|', zorder=1, label="picks_%d" % i)
+	# plt.legend()
 	lpick = []
 
 	def handler(event):
@@ -69,10 +75,12 @@ def chan_groups(d, groups, shifts=None, labels=None, **kwargs):
 			plt.text(0, shifts[i] + 0.1, lbl, fontsize=15)
 
 
-def sigs(d, shifts=None, labels=None, **kwargs):
-	if shifts is None:
-		shifts = np.arange(0, d.shape[0], 1) * 1.2
+def sigs(d, shifts=None, labels=None, picks=None, spacing=1.2, **kwargs):
 
+	import matplotlib.lines as mlines
+
+	if shifts is None:
+		shifts = np.arange(0, d.shape[0], 1) * spacing
 	for i, sig in enumerate(d):
 		tmp = sig / np.max(np.abs(sig)) + shifts[i]
 		plt.plot(tmp, **kwargs)
@@ -80,6 +88,19 @@ def sigs(d, shifts=None, labels=None, **kwargs):
 	if labels is not None:
 		for i, lbl in enumerate(labels):
 			plt.text(0, shifts[i] + 0.1, lbl, fontsize=10)
+
+	if picks is not None:
+		leg = []
+		size = (shifts[1] - shifts[0]) / 4
+		for i, pgroup in enumerate(picks):
+			clr = "C{}".format(i)
+			for j, pick in enumerate(pgroup):
+				xv = [pick, pick]
+				yv = [shifts[j] - size, shifts[j] + size]
+				plt.plot(xv, yv, color=clr)
+			leg.append(mlines.Line2D([], [], color=clr, label="picks_%d" % i))
+		
+		plt.legend(handles=leg)
 
 
 def ccf(d, sr=None):

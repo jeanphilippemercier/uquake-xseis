@@ -10,6 +10,7 @@ namespace xs {
 // const int FFTW_PATIENCE = FFTW_ESTIMATE;
 // const int FFTW_PATIENCE = FFTW_MEASURE;
 const int FFTW_PATIENCE = FFTW_PATIENT;
+// const int FFTW_PATIENCE = FFTW_EXHAUSTIVE;
 // const int FFTW_PATIENCE = FFTW_WISDOM_ONLY;
 
 

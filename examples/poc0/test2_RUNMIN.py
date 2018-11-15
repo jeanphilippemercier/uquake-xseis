@@ -1,6 +1,8 @@
 from importlib import reload
 import numpy as np
 import matplotlib.pyplot as plt
+from datetime import datetime, timedelta
+
 # import os
 # import glob
 # import datetime
@@ -16,7 +18,11 @@ plt.ion()
 
 ddir = "/home/phil/data/oyu/synthetic/"
 # mseed_file = ddir + 'sim_dat.mseed'
-mseed_file = ddir + 'sim_dat3.mseed'
+# mseed_file = ddir + 'sim_dat3.mseed'
+
+mseed_file = ddir + 'sim_dat_noise.mseed'
+# mseed_file = '/home/phil/data/oyu/mseed_new/20180523_185101_float.mseed'
+
 npz_file = ddir + 'output.npz'
 tts_path = '/home/phil/data/oyu/NLLOC_grids/'
 
@@ -45,7 +51,9 @@ vmax, imax, iot = out
 print("power: %.3f, ix_grid: %d, ix_ot: %d" % (vmax, imax, iot))
 lmax = xutil.imax_to_xyz_gdef(imax, gdef)
 print(lmax.astype(int))
-ot_epoch = (t0 + iot / dsr).datetime.timestamp()
+otime = t0 + iot / dsr
+# ot_epoch = (t0 + iot / dsr).datetime.timestamp()
+ot_epoch = (otime.datetime - datetime(1970, 1, 1)) / timedelta(seconds=1)
 
 reload(xflow)
 msg, key = xflow.encode_for_kafka(ot_epoch, lmax, vmax)

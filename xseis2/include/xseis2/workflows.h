@@ -21,6 +21,9 @@ namespace xs {
 
 void WFSearchOnePhase(Array2D<float>& rdat, float sr, Array2D<float>& stalocs, Vector<uint16_t>& chanmap, VecOfSpans<uint16_t> ttable, int64_t* outbuf, int debug, std::string& npzfile) 
 {	
+
+	// std::vector<float> cfreqs {40, 50, 350, 360};
+
 	auto logger = xs::Logger();
 	if (debug > 0) logger.log("Start");
 
@@ -60,7 +63,7 @@ void WFSearchOnePhase(Array2D<float>& rdat, float sr, Array2D<float>& stalocs, V
 	// SEARCH //////////////////////////////////////////////////////////////
 	auto power = xs::Vector<float>(ttable[0].size());
 	xs::InterLocBlocks(ccdat.rows(), pairs, ttable, power.span());
-
+	
 	// auto power = xs::InterLoc(ccdat.rows(), pairs, ttable);
 	// auto power = xs::InterLocBad(ccdat.rows(), pairs, ttable);
 	size_t imax = xs::ArgMax(power.span());
@@ -121,9 +124,11 @@ void SearchOnePhase(float* rawdat_p, uint32_t nchan, uint32_t npts, float sr, fl
 {
 
 	omp_set_num_threads(nthreads);
+	std::string const XSHOME = std::getenv("SPP_COMMON");
 	// std::string const XSHOME = std::getenv("XSHOME");
-	// std::string file_wisdom = XSHOME + "/data/fftw3_wisdom.txt";
-	std::string file_wisdom = "fftw3_wisdom.txt";
+	std::string file_wisdom = XSHOME + "fftw3_wisdom.txt";
+	// std::string file_wisdom = "fftw3_wisdom.txt";
+
 	fftwf_import_wisdom_from_filename(&file_wisdom[0]);
 	// std::cout << "file_wisdom: " << file_wisdom << "\n";
 

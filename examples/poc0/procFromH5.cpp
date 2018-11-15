@@ -27,14 +27,15 @@ int main(int argc, char const *argv[])
 	auto logger = xs::Logger();
 
 	// IO ///////////////////////////////////////////////////////////////////////
-	std::string const HOME = std::getenv("HOME");
-	std::string dir_dat = HOME + "/data/oyu/synthetic/";
-	std::string const XSHOME = std::getenv("XSHOME");
-	std::string file_wisdom = XSHOME + "/fftw3_wisdom.txt";
+	std::string const HOME = std::getenv("SPP_COMMON");
+	std::string dir_dat = HOME + "synthetic/";
+
+	// std::string const XSHOME = std::getenv("SPP_COMMON");
+	std::string file_wisdom = HOME + "fftw3_wisdom.txt";
 	fftwf_import_wisdom_from_filename(&file_wisdom[0]);
 	std::cout << "file_wisdom: " << file_wisdom << "\n";
 
-	std::string file_out = HOME + "/data/oyu/synthetic/output.npz";
+	std::string file_out = HOME + "output.npz";
 	
 	auto hf = xs::H5File(dir_dat + "sim_nll.h5");	
 	// auto hf = xs::H5File(dir_dat + "sim_dat3.h5");	
