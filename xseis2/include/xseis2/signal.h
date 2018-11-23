@@ -391,6 +391,7 @@ Vector<float> SumRows(VecOfSpans<float> dat)
 // Forward fft of data and whitens between corner freqs, data is modified
 Array2D<Complex32> FFTAndWhiten(Array2D<float>& dat, float const sr, std::vector<float> cfreqs, float const taper_len=0.02) 
 {
+
 	size_t const nchan = dat.nrow();
 	size_t const wlen = dat.ncol();
 	uint32_t const taper_nsamp = taper_len * wlen;

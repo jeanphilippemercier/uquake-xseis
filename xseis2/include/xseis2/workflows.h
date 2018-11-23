@@ -22,7 +22,10 @@ namespace xs {
 void WFSearchOnePhase(Array2D<float>& rdat, float sr, Array2D<float>& stalocs, Vector<uint16_t>& chanmap, VecOfSpans<uint16_t> ttable, int64_t* outbuf, int debug, std::string& npzfile) 
 {	
 
-	// std::vector<float> cfreqs {40, 50, 350, 360};
+	std::vector<float> cfreqs {40, 50, 350, 360};
+	float dist_min = 0;
+	float dist_max = 2000;
+	uint32_t const smooth_cc_wlen = 0.005 * sr;
 
 	auto logger = xs::Logger();
 	if (debug > 0) logger.log("Start");
@@ -31,7 +34,7 @@ void WFSearchOnePhase(Array2D<float>& rdat, float sr, Array2D<float>& stalocs, V
 	auto dat = xs::ZeroPad(rdat, rdat.ncol() * 2);
 	if (debug > 0) logger.log("create padded");
 
-	auto fdat = xs::FFTAndWhiten(dat, sr, {40, 50, 350, 360});
+	auto fdat = xs::FFTAndWhiten(dat, sr, cfreqs);
 	if (debug > 0) logger.log("fft");
 	if (debug == 2) xs::NpzSave(npzfile, "dat_preproc", dat.rows(), "w");
 	if (debug == 2) logger.log("save dat");
@@ -41,7 +44,7 @@ void WFSearchOnePhase(Array2D<float>& rdat, float sr, Array2D<float>& stalocs, V
 	auto keys = xs::Arange<uint16_t>(0, stalocs.nrow());
 	auto allpairs = xs::UniquePairs(keys);
 	// auto pairs = allpairs.rows();
-	auto pairs = xs::DistFiltPairs(allpairs.rows(), stalocs.rows(), 0, 2000);
+	auto pairs = xs::DistFiltPairs(allpairs.rows(), stalocs.rows(), dist_min, dist_max);
 	if (debug > 0) printf("using %lu pairs of %lu total\n", pairs.size(), allpairs.nrow());
 	if (debug > 0) logger.log("build sta pairs");
 	if (debug == 2) xs::NpzSave(npzfile, "sta_pairs", pairs, "a");
@@ -49,7 +52,6 @@ void WFSearchOnePhase(Array2D<float>& rdat, float sr, Array2D<float>& stalocs, V
 
 
 	// XCORRS //////////////////////////////////////////////////////////////
-	uint32_t const smooth_cc_wlen = 0.005 * sr;
 	auto ccdat = xs::Array2D<float>(pairs.size(), dat.ncol());	
 	xs::XCorrCombineChans(fdat, groups, pairs, ccdat, smooth_cc_wlen);
 	if (debug > 0) logger.log("xcorr");
@@ -124,11 +126,8 @@ void SearchOnePhase(float* rawdat_p, uint32_t nchan, uint32_t npts, float sr, fl
 {
 
 	omp_set_num_threads(nthreads);
-	std::string const XSHOME = std::getenv("SPP_COMMON");
-	// std::string const XSHOME = std::getenv("XSHOME");
-	std::string file_wisdom = XSHOME + "fftw3_wisdom.txt";
-	// std::string file_wisdom = "fftw3_wisdom.txt";
-
+	std::string const HOME = std::getenv("SPP_COMMON");
+	std::string file_wisdom = HOME + "fftw3_wisdom.txt";
 	fftwf_import_wisdom_from_filename(&file_wisdom[0]);
 	// std::cout << "file_wisdom: " << file_wisdom << "\n";
 
@@ -138,11 +137,9 @@ void SearchOnePhase(float* rawdat_p, uint32_t nchan, uint32_t npts, float sr, fl
 	auto dat = xs::Array2D<float>(rawdat_p, nchan, npts, true); // copies data
 	auto stalocs = xs::Array2D<float>(stalocs_p, nsta, 3, false);
 	auto chanmap = xs::Vector<uint16_t>(chanmap_p, nchan);
-	// auto ttable = Array2D<uint16_t>(ttable_ptr, nsta, ngrid, false);
 
 	xs::WFSearchOnePhase(dat, sr, stalocs, chanmap, ttable, outbuf, debug, npzfile);
-	// WFSearchOnePhase(dat, sr, stalocs, chanmap, ttable.rows(), outbuf, npzfile, debug);
-
+	
 	fftwf_export_wisdom_to_filename(&file_wisdom[0]);
 	
 }
