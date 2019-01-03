@@ -9,7 +9,7 @@ git submodule update --init
 
 # in ubuntu you might depend on g++7 or higher
 # CC=g++-8 CXX=g++-8 CFLAGS="-I/usr/include/hdf5/serial" pip install --user .
-CC=g++-8 CXX=g++-8 CFLAGS="-I/usr/include/hdf5/serial" pip install -e .
+CC=g++-7 CXX=g++-7 CFLAGS="-I/usr/include/hdf5/serial" pip install -e .
 # cp /home/phil/.local/lib/python3.6/site-packages/xseis2/*.so
 ```
 

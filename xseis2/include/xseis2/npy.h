@@ -6,7 +6,8 @@
 // #include <vector>
 // #include <stdlib.h>
 // #include <malloc.h>
-#include "cnpy/cnpy.h"
+// #include "cnpy/cnpy.h"
+#include "cnpy.h"
 
 #include "xseis2/core.h"
 
@@ -14,8 +15,8 @@
 // #include "gsl/span"
 
 
-// typedef std::vector<std::vector<IndexType>> VVui64; 
-// typedef std::vector<std::vector<uint16_t>> VVui16; 	
+// typedef std::vector<std::vector<IndexType>> VVui64;
+// typedef std::vector<std::vector<uint16_t>> VVui16;
 
 namespace xs {
 
@@ -32,7 +33,7 @@ NpySave(std::string fname, Array2D<T>& data)
 	fseek(fp, 0, SEEK_END);
 
 	for(auto&& v : data.rows()) {
-		fwrite(&v[0], sizeof(T), shape[1], fp);		
+		fwrite(&v[0], sizeof(T), shape[1], fp);
 	}
 	fclose(fp);
 }
@@ -149,7 +150,7 @@ void NpzSave(std::string zipname, std::string fname, xs::VecOfSpans<T> data, std
 
 	// fwrite(data,sizeof(T),nels,fp);
 	for(auto&& v : data) {
-		fwrite(&v[0], sizeof(T), v.size(), fp);		
+		fwrite(&v[0], sizeof(T), v.size(), fp);
 	}
 
 	fwrite(&global_header[0],sizeof(char),global_header.size(),fp);
