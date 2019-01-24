@@ -33,9 +33,10 @@ def mlab_contour(g, ncont=10, vfmin=0.1, vfmax=0.1, ranges=None, vlims=None, cba
 	return src
 
 
-def power(output, gdef, stalocs=None, labels=None, lines=None, lmax=None, title=None):
+# def power(output, gdef, stalocs=None, labels=None, lines=None, lmax=None, title=None):
 
-	shape, origin, spacing = gdef[:3], gdef[3:6], gdef[6]
+def power(output, shape, origin, spacing, stalocs=None, labels=None, lines=None, lmax=None, title=None):
+	# shape, origin, spacing = gdef[:3], gdef[3:6], gdef[6]
 	grid = output.reshape(shape)
 
 	lims = np.zeros((3, 2))
