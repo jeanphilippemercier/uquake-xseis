@@ -1,0 +1,17 @@
+* Stress change (info from gerrits paper)
+
+- coda will decay exponentially up to ~0.5 seconds lag time
+
+- In this lag time travel time delays will range from 0 to 2.5e-4 seconds
+
+- These changes are less than the sample spacing so phase shift measurements need to be made in frequency domain via linear regression of unwrapped cross-spectrum phase
+
+- expect to make measurements in band 100-240 Hz
+
+- Hope to measure changes on the order of 0.01% dv/v
+
+- 10 second sections, whitened between 20-240 Hz and one-bit normalised
+
+- Coda stable after 1 hour (i.e monitoring time resolution of 1 hour)
+
+- To approximate the values of the velocity change between sensors we used a 3D triangulation-based linear interpolation method.

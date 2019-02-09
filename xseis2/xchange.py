@@ -64,7 +64,45 @@ def getCoherence(dcs, ds1, ds2):
     return coh
 
 
-def mwcs(current, reference, freqmin, freqmax, df, tmin, window_length, step,
+def phase_shift_freq(sig1, sig2, sr, flims=None):
+
+    wlen_samp = len(sig1)
+    pad = int(2 ** (nextpow2(2 * wlen_samp)))
+    taper = cosine_taper(wlen_samp, 0.85)
+
+    sig1 = scipy.signal.detrend(sig1.copy(), type='linear') * taper
+    sig2 = scipy.signal.detrend(sig2.copy(), type='linear') * taper
+
+    freqs = np.fft.rfftfreq(pad, 1.0 / sr)
+    fsr = 1.0 / (freqs[1] - freqs[0])
+
+    fs1 = np.fft.rfft(sig1, n=pad)
+    fs2 = np.fft.rfft(sig2, n=pad)
+
+    ccf = fs1 * np.conj(fs2)
+
+    if flims is None:
+        flims = np.array([0, freqs[-1]])
+
+    ixf = (flims * fsr + 0.5).astype(int)
+    v = freqs[ixf[0]:ixf[1]] * 2 * np.pi
+
+    # Phase:
+    phi = np.angle(ccf)
+    phi = np.unwrap(phi)
+    phi = phi[ixf[0]:ixf[1]]
+
+    cc = np.fft.irfft(ccf)
+    cc = np.roll(cc, len(cc) // 2)
+    imax = np.argmax(cc) - len(cc) // 2
+    tmax = imax / sr
+
+    m, em = linear_regression(v, phi)
+
+    return m, tmax
+
+
+def mwcs_msnoise(current, reference, freqmin, freqmax, df, tmin, window_length, step,
          smoothing_half_win=5):
     """
     :type current: :class:`numpy.ndarray`
