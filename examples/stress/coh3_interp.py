@@ -33,29 +33,33 @@ wlen_sec = 0.1
 sr = 3000.0
 # tt_change_percent = 2.0
 
+
 nsamp = int(wlen_sec * sr)
 cfreqs = [40, 50, 240, 250]
 sig = xutil.noise1d(nsamp, cfreqs, sr, scale=1, taplen=0.01)
 # newsig = xchange.stretch(sig, sr, tt_change_percent)
 cfreqs = [10, 20, 800, 900]
-noise1 = xutil.noise1d(nsamp, cfreqs, sr, scale=0.2, taplen=0.01)
-noise2 = xutil.noise1d(nsamp, cfreqs, sr, scale=0.2, taplen=0.01)
+nscale = 0.2
+noise1 = xutil.noise1d(nsamp, cfreqs, sr, scale=nscale, taplen=0.01)
+noise2 = xutil.noise1d(nsamp, cfreqs, sr, scale=nscale, taplen=0.01)
 
 
-rollby = 10
-dtt = rollby / sr
+rollby = 1
+dtt_true = rollby / sr
 sig1 = sig
 sig2 = np.roll(sig, rollby)
 sig1 += noise1
 sig2 += noise2
+print(f"dt/t: {dtt_true}")
 
 reload(xchange)
 flims = np.array([50., 250.])
 m, dtt = xchange.phase_shift_freq(sig1, sig2, sr, flims=flims)
 # %timeit xchange.phase_shift_freq(sig1, sig2, sr, flims=flims)
-
+print(f"slope: {m} dt/t: {dtt}")
 plt.plot(sig1)
 plt.plot(sig2)
+
 
 wlen_samp = nsamp
 pad = int(2 ** (nextpow2(2 * wlen_samp)))

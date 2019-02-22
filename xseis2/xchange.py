@@ -64,7 +64,19 @@ def getCoherence(dcs, ds1, ds2):
     return coh
 
 
-def phase_shift_freq(sig1, sig2, sr, flims=None):
+def apply_phase_shift(sig, nshift):
+    fsig = np.fft.rfft(sig)
+    nfreq = len(fsig)
+    fstep = 0.5 / (nfreq - 1)
+    factor = -nshift * 2.0 * np.pi * fstep
+    vec = np.zeros(nfreq, dtype=np.complex64)
+    inds = np.arange(nfreq)
+    vec.real = np.cos(inds * factor)
+    vec.imag = np.sin(inds * factor)
+    return np.fft.irfft(vec * fsig)
+
+
+def measure_phase_shift(sig1, sig2, sr, flims=None):
 
     wlen_samp = len(sig1)
     pad = int(2 ** (nextpow2(2 * wlen_samp)))
@@ -228,5 +240,95 @@ def mwcs_msnoise(current, reference, freqmin, freqmax, df, tmin, window_length, 
 
     return np.array([time_axis, delta_t, delta_err, delta_mcoh]).T
 
+
+def mwcs_msnoise_single(cci, cri, freqmin, freqmax, df, smoothing_half_win=5):
+
+    window_length_samples = len(cci)
+
+    # window_length_samples = np.int(window_length * df)
+
+    padd = int(2 ** (nextpow2(window_length_samples) + 2))
+    # padd = next_fast_len(window_length_samples)
+    # count = 0
+    tp = cosine_taper(window_length_samples, 0.85)
+    # minind = 0
+    # maxind = window_length_samples
+    # while maxind <= len(current):
+    #     cci = current[minind:(minind + window_length_samples)]
+    cci = scipy.signal.detrend(cci, type='linear')
+    cci *= tp
+
+    # cri = reference[minind:(minind + window_length_samples)]
+    cri = scipy.signal.detrend(cri, type='linear')
+    cri *= tp
+
+    # minind += int(step * df)
+    # maxind += int(step * df)
+
+    fcur = scipy.fftpack.fft(cci, n=padd)[:padd // 2]
+    fref = scipy.fftpack.fft(cri, n=padd)[:padd // 2]
+
+    fcur2 = np.real(fcur) ** 2 + np.imag(fcur) ** 2
+    fref2 = np.real(fref) ** 2 + np.imag(fref) ** 2
+
+    # Calculate the cross-spectrum
+    X = fref * (fcur.conj())
+    if smoothing_half_win != 0:
+        dcur = np.sqrt(smooth(fcur2, window='hanning',
+                              half_win=smoothing_half_win))
+        dref = np.sqrt(smooth(fref2, window='hanning',
+                              half_win=smoothing_half_win))
+        X = smooth(X, window='hanning',
+                   half_win=smoothing_half_win)
+    else:
+        dcur = np.sqrt(fcur2)
+        dref = np.sqrt(fref2)
+
+    dcs = np.abs(X)
+
+    # Find the values the frequency range of interest
+    freq_vec = scipy.fftpack.fftfreq(len(X) * 2, 1. / df)[:padd // 2]
+    index_range = np.argwhere(np.logical_and(freq_vec >= freqmin,
+                                             freq_vec <= freqmax))
+
+    # Get Coherence and its mean value
+    coh = getCoherence(dcs, dref, dcur)
+    mcoh = np.mean(coh[index_range])
+
+    # Get Weights
+    w = 1.0 / (1.0 / (coh[index_range] ** 2) - 1.0)
+    w[coh[index_range] >= 0.99] = 1.0 / (1.0 / 0.9801 - 1.0)
+    w = np.sqrt(w * np.sqrt(dcs[index_range]))
+    w = np.real(w)
+
+    # Frequency array:
+    v = np.real(freq_vec[index_range]) * 2 * np.pi
+
+    # Phase:
+    phi = np.angle(X)
+    phi[0] = 0.
+    phi = np.unwrap(phi)
+    phi = phi[index_range]
+
+    # Calculate the slope with a weighted least square linear regression
+    # forced through the origin
+    # weights for the WLS must be the variance !
+    m, em = linear_regression(v.flatten(), phi.flatten(), w.flatten())
+
+    # delta_t.append(m)
+
+    # print phi.shape, v.shape, w.shape
+    e = np.sum((phi - m * v) ** 2) / (np.size(v) - 1)
+    s2x2 = np.sum(v ** 2 * w ** 2)
+    sx2 = np.sum(w * v ** 2)
+    e = np.sqrt(e * s2x2 / sx2 ** 2)
+
+    # delta_err.append(e)
+    # delta_mcoh.append(np.real(mcoh))
+    # time_axis.append(tmin+window_length/2.+count*step)
+    # count += 1
+
+    # return np.array([time_axis, delta_t, delta_err, delta_mcoh]).T
+    return m, e, coh
 
 

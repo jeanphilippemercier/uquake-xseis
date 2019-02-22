@@ -112,8 +112,8 @@ else:
 
 dcs = np.abs(X)
 
-plt.plot(dcur)
-plt.plot(dref)
+# plt.plot(dcur)
+# plt.plot(dref)
 freqmin = 50
 freqmax = 250
 
@@ -151,6 +151,7 @@ plt.plot(np.angle(X))
 # forced through the origin
 # weights for the WLS must be the variance !
 m, em = linear_regression(v, phi, w)
+# m, em = linear_regression(v, phi)
 print(m, dtr)
 
 delta_t.append(m)

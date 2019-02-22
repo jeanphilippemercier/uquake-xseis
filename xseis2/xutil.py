@@ -16,6 +16,7 @@ import glob
 # from scipy.signal import sosfilt, zpk2sos, iirfilter
 
 
+
 def ricker(freq, sr, length=0.2):
     f = freq
     dt = 1. / sr
