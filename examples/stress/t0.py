@@ -37,7 +37,7 @@ def stretch(sig, sr, tt_change_percent):
     xnew = np.arange(0, npts) / sr_new
     newsig = interp(xnew)
 
-    return newsig
+    return newsig.astype(sig.dtype)
 
 
 wlen = 0.5

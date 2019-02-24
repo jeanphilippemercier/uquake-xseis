@@ -1,3 +1,13 @@
+* Questions
+- [ ] Fix zero mid for second regression?
+- [ ] Use all lag times or only after expected direct arrival?
+- [ ] Always regress causal/acausal together?
+- [ ] Determining best window size?
+
+* Implentation
+- From testing, measuring lag from cross-correlation much more robust than mwcs. Subsample resolution achieved by interpolating ifft
+
+
 * Stress change (info from gerrits paper)
 
 - coda will decay exponentially up to ~0.5 seconds lag time

@@ -550,6 +550,11 @@ def energy_freq(fsig, axis=None):
     return np.sum(np.abs(fsig) ** 2, axis=axis) / fsig.shape[-1]
 
 
+def norm_energy_freq(fsig):
+    val = np.sqrt(np.sum(np.abs(fsig) ** 2) / len(fsig))
+    return fsig / val
+
+
 def build_slice_inds(start, stop, wlen, stepsize=None):
 
     if stepsize is None:
@@ -558,8 +563,11 @@ def build_slice_inds(start, stop, wlen, stepsize=None):
     overlap = wlen - stepsize
     imin = np.arange(start, stop - overlap - 1, stepsize)
     imax = np.arange(start + wlen, stop + stepsize - 1, stepsize)
+    slices = np.dstack((imin, imax))[0].astype(int)
+    if slices[-1][1] > stop:
+        slices = slices[:-1]
 
-    return np.dstack((imin, imax))[0].astype(int)
+    return slices
 
 
 def freq_window(cf, npts, sr):
@@ -575,6 +583,17 @@ def freq_window(cf, npts, sr):
     win[cx[2]:cx[3]] = taper_cosine(cx[3] - cx[2])[::-1]
     win[cx[-1]:] = 0
     return win
+
+
+def taper_window(npts, taper_percentage):
+
+    taplen = int(taper_percentage * npts)
+    taper = taper_cosine(taplen)
+
+    window = np.ones(npts, dtype=np.float32)
+    window[:taplen] *= taper
+    window[-taplen:] *= taper[::-1]
+    return window
 
 
 def taper_cosine(wlen):

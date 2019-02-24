@@ -128,6 +128,7 @@ plt.scatter(midtime, tmax)
 tfit = c[1] + c[0] * midtime
 plt.plot(midtime, tfit)
 
+
 m, em = linear_regression(v.flatten(), phi.flatten(), w.flatten())
 
 

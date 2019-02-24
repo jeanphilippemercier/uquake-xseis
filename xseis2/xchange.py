@@ -8,7 +8,92 @@ import scipy.signal
 from scipy.stats import scoreatpercentile
 from obspy.signal.invsim import cosine_taper
 from scipy.fftpack.helper import next_fast_len
-from obspy.signal.regression import linear_regression
+from obspy.signal.regression import linear_regression as obspy_linear_regression
+from xseis2 import xutil
+from numpy.polynomial.polynomial import polyfit
+
+
+def linear_regression(xv, yv, weights, outlier_sd=None):
+    c, stats = polyfit(xv, yv, 1, full=True, w=weights)
+    yint, slope = c
+    residual = stats[0][0] / len(xv)
+    ikeep = np.arange(len(xv))
+
+    if outlier_sd is not None:
+        residuals = np.abs(yv - (yint + slope * xv))
+        std_res = np.std(residuals)
+        ikeep = np.where(residuals < std_res * outlier_sd)[0]
+        c, stats = polyfit(xv[ikeep], yv[ikeep], 1, full=True, w=weights[ikeep])
+        yint, slope = c
+        residual = stats[0][0] / len(xv)
+        print("stdev residuals: %.3f")
+
+    return yint, slope, residual, ikeep
+
+
+def windowed_fft(sig, slices, sr, corner_freqs, taper_percent=0.2):
+
+    # print("num slices", len(slices))
+    wlen_samp = slices[0][1] - slices[0][0]
+    pad = int(2 * wlen_samp)
+    taper = xutil.taper_window(wlen_samp, taper_percent)
+    freqs = np.fft.rfftfreq(pad, 1.0 / sr)
+    nfreq = len(freqs)
+
+#     fband = [5, 7, 18, 22]
+    filt = xutil.freq_window(corner_freqs, pad, sr)
+    # norm = 1.0 / xutil.energy(filt) * 2
+
+    fdat = np.zeros((len(slices), nfreq), dtype=np.complex64)
+
+    for i, sl in enumerate(slices):
+        fsig = np.fft.rfft(sig[sl[0]:sl[1]] * taper, n=pad)
+        fdat[i] = xutil.norm_energy_freq(filt * xutil.phase(fsig))
+
+    return fdat, filt
+
+
+def measure_shift_fwins_cc(fwins1, fwins2, interp_factor=1):
+
+    nwin, nfreq = fwins1.shape
+    pad = nfreq * 2 - 1
+
+    out = np.zeros((nwin, 2))
+
+    for i, (w1, w2) in enumerate(zip(fwins1, fwins2)):
+        ccf = np.conj(w1) * w2
+        cc = np.fft.irfft(ccf, n=pad * interp_factor)
+        cc = np.roll(cc, len(cc) // 2)
+        imax = (np.argmax(cc) - len(cc) // 2) / interp_factor
+        out[i] = [imax, np.max(cc) * interp_factor]
+
+    return out
+
+
+def measure_shift_cc(sig1, sig2, interp_factor=1, taper_percent=0.2):
+
+    wlen_samp = len(sig1)
+    pad = int(2 * wlen_samp)
+    taper = xutil.taper_window(wlen_samp, taper_percent)
+    # freqs = np.fft.rfftfreq(pad, 1.0 / sr)
+    # nfreq = len(freqs)
+    # fsr = 1.0 / (freqs[1] - freqs[0])
+
+    fs1 = np.fft.rfft(sig1 * taper, n=pad)
+    fs2 = np.fft.rfft(sig2 * taper, n=pad)
+
+    fs1 /= np.sqrt(xutil.energy_freq(fs1))
+    fs2 /= np.sqrt(xutil.energy_freq(fs2))
+
+    ccf = np.conj(fs1) * fs2
+
+    cc = np.fft.irfft(ccf, n=pad * interp_factor) * interp_factor
+    cc = np.roll(cc, len(cc) // 2)
+    imax = (np.argmax(cc) - len(cc) // 2) / interp_factor
+    # tmax = imax / sr
+
+    return imax, np.max(cc), cc
+    # return cc, imax
 
 
 def stretch(sig, sr, tt_change_percent):
@@ -27,7 +112,8 @@ def stretch(sig, sr, tt_change_percent):
     xnew = np.arange(0, npts) / sr_new
     newsig = interp(xnew)
 
-    return newsig
+    return newsig.astype(sig.dtype)
+
 
 # def nextpow2(val):
 #     buf = math.ceil(math.log(val) / math.log(2))
@@ -109,7 +195,7 @@ def measure_phase_shift(sig1, sig2, sr, flims=None):
     imax = np.argmax(cc) - len(cc) // 2
     tmax = imax / sr
 
-    m, em = linear_regression(v, phi)
+    m, em = obspy_linear_regression(v, phi)
 
     return m, tmax
 
@@ -214,7 +300,7 @@ def mwcs_msnoise(current, reference, freqmin, freqmax, df, tmin, window_length, 
         # Calculate the slope with a weighted least square linear regression
         # forced through the origin
         # weights for the WLS must be the variance !
-        m, em = linear_regression(v.flatten(), phi.flatten(), w.flatten())
+        m, em = obspy_linear_regression(v.flatten(), phi.flatten(), w.flatten())
 
         delta_t.append(m)
 
@@ -313,7 +399,7 @@ def mwcs_msnoise_single(cci, cri, freqmin, freqmax, df, smoothing_half_win=5):
     # Calculate the slope with a weighted least square linear regression
     # forced through the origin
     # weights for the WLS must be the variance !
-    m, em = linear_regression(v.flatten(), phi.flatten(), w.flatten())
+    m, em = obspy_linear_regression(v.flatten(), phi.flatten(), w.flatten())
 
     # delta_t.append(m)
 
