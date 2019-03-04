@@ -11,6 +11,22 @@ from scipy.fftpack.helper import next_fast_len
 from obspy.signal.regression import linear_regression as obspy_linear_regression
 from xseis2 import xutil
 from numpy.polynomial.polynomial import polyfit
+import matplotlib.pyplot as plt
+
+
+def plot_tt_change(xv, imax, coh, yint, slope, res, ik):
+
+    tfit = yint + slope * xv
+
+    plt.scatter(xv[ik], imax[ik], c=coh[ik])
+    plt.colorbar()
+    mask = np.ones_like(xv, bool)
+    mask[ik] = False
+    plt.scatter(xv[mask], imax[mask], c='red', alpha=0.2)
+    # plt.scatter(xv[ik], imax[ik], c='red', alpha=0.5)
+    plt.plot(xv, tfit)
+    # plt.plot(xv, tfit)
+    plt.title("tt_change: %.3f%% ss_res: %.3f " % (slope * 100, res))
 
 
 def linear_regression(xv, yv, weights, outlier_sd=None):
@@ -23,10 +39,11 @@ def linear_regression(xv, yv, weights, outlier_sd=None):
         residuals = np.abs(yv - (yint + slope * xv))
         std_res = np.std(residuals)
         ikeep = np.where(residuals < std_res * outlier_sd)[0]
-        c, stats = polyfit(xv[ikeep], yv[ikeep], 1, full=True, w=weights[ikeep])
-        yint, slope = c
-        residual = stats[0][0] / len(xv)
-        print("stdev residuals: %.3f")
+        if len(ikeep) != 0:
+            c, stats = polyfit(xv[ikeep], yv[ikeep], 1, full=True, w=weights[ikeep])
+            yint, slope = c
+            residual = stats[0][0] / len(xv)
+            print("stdev residuals: %.3f")
 
     return yint, slope, residual, ikeep
 
