@@ -44,28 +44,28 @@ def pySearchOnePhase(np.ndarray[np.float32_t, ndim=2] data,
 					debug_lvl,
 					debug_file
 			   ):
-"""
-Pre-process, cross-correlate and beamform raw_data using provided traveltime table.
-The provided traveltimes determine which phase (e.g P,S) is searched for.
 
-:param data: 2d array of channel data (1 row per channel), assumes all starttimes equal
-:param samplerate: sampling rate of data
-:param chanmap: indexes to map each channel to its respective station location
-:param stalocs: unique station locations (shape = nsta x 3)
-:param tt_ptrs: pointers to rows in the traveltime table corresponding to stalocs
-:param ngrid: number of columns (or search locations) in the traveltime tables
-:param whiten_corner_freqs: array of 4 floats defining whitening corner frequencies in Hz
-:param pair_dist_min: uses only correlation pairs between dist_min and dist_max (meters)
-:param pair_dist_max:
-:param cc_smooth_length_sec: length to absolute value smooth ccfs before beamforming
-:param debug_lvl: int 0 (disabled) 1 (logging) 2 (logging + data dump) to debug_file
+# Pre-process, cross-correlate and beamform raw_data using provided traveltime table.
+# The provided traveltimes determine which phase (e.g P,S) is searched for.
+
+# :param data: 2d array of channel data (1 row per channel), assumes all starttimes equal
+# :param samplerate: sampling rate of data
+# :param chanmap: indexes to map each channel to its respective station location
+# :param stalocs: unique station locations (shape = nsta x 3)
+# :param tt_ptrs: pointers to rows in the traveltime table corresponding to stalocs
+# :param ngrid: number of columns (or search locations) in the traveltime tables
+# :param whiten_corner_freqs: array of 4 floats defining whitening corner frequencies in Hz
+# :param pair_dist_min: uses only correlation pairs between dist_min and dist_max (meters)
+# :param pair_dist_max:
+# :param cc_smooth_length_sec: length to absolute value smooth ccfs before beamforming
+# :param debug_lvl: int 0 (disabled) 1 (logging) 2 (logging + data dump) to debug_file
 
 
-* Important that rows of tt_ptrs are consistent with rows of station locations
-* The chanmap is used to determine the traveltimes to use for each channel
-  in the data array.
+# * Important that rows of tt_ptrs are consistent with rows of station locations
+# * The chanmap is used to determine the traveltimes to use for each channel
+#   in the data array.
 
-"""
+
 	chanmap = np.ascontiguousarray(chanmap)
 	stalocs = np.ascontiguousarray(stalocs)
 	data = np.ascontiguousarray(data)
