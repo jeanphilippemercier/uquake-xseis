@@ -25,7 +25,7 @@ ext_modules = cythonize([
             'fftw3', 'fftw3f', 'fftw3l', 'fftw3_threads', 'fftw3f_threads',
             'fftw3l_threads', 'z'
         ],
-        include_dirs=[np.get_include(), 'xseis2/include'],
+        include_dirs=[np.get_include(), 'xseis2/include', 'cnpy'],
     )
 ])
 
