@@ -1,4 +1,5 @@
 # distutils: language = c++
+# cython: language_level=3
 # Cython interface file for wrapping the object
 cimport numpy as np
 import numpy as np

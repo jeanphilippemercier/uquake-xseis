@@ -5,9 +5,10 @@ from distutils.core import Extension, setup
 import numpy as np
 from Cython.Build import cythonize
 from Cython.Distutils import build_ext
-from xseis2 import __version__
 
 # os.environ["CXX"] = "g++-7"
+
+__version__ = "0.1.0"
 
 requirements = [
     'numpy',
