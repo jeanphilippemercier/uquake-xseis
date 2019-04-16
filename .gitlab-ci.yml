@@ -24,7 +24,7 @@ build:
     paths:
     - dist/
 
-release:
+release:tag:
   stage: release
   image: python:3.7
   only:
