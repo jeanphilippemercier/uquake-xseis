@@ -5,6 +5,7 @@ from distutils.core import Extension, setup
 import numpy as np
 from Cython.Build import cythonize
 from Cython.Distutils import build_ext
+from xseis2 import __version__
 
 # os.environ["CXX"] = "g++-7"
 
@@ -34,6 +35,7 @@ def main():
     setup(
         name='xseis2',
         libraries=[libcnpy],
+        version=__version__,
         cmdclass={
             'build_clib': build_clib,
             'build_ext': build_ext

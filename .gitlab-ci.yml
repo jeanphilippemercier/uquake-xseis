@@ -1,0 +1,23 @@
+stages:
+- build
+- release
+
+build:
+  stage: build
+  image: python:3.7
+  script:
+  - python setup.py bdist_wheel
+  - pip3 install wheel
+  artifacts:
+    expire_in: 2 months
+    paths:
+    - dist/
+
+release:
+  stage: release
+  only: master
+  script:
+  - pip3 install gitlab-release
+  artifacts:
+    paths:
+    - dist/*whl
