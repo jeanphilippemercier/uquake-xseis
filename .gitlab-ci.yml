@@ -5,6 +5,8 @@ stages:
 build:
   stage: build
   image: python:3.7
+  only:
+  - master
   script:
   - python setup.py bdist_wheel
   - pip3 install wheel
@@ -15,7 +17,9 @@ build:
 
 release:
   stage: release
-  only: master
+  image: python:3.7
+  only:
+  - master
   script:
   - pip3 install gitlab-release
   artifacts:
