@@ -16,7 +16,7 @@ build:
       gfortran swig libatlas-dev liblapack-dev
       libhdf5-dev libfftw3-dev build-essential
   - pip3 install poetry wheel
-  - pip3 install numpy
+  - pip3 install numpy cython
   - python setup.py bdist_wheel
   artifacts:
     expire_in: 2 months
