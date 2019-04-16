@@ -17,7 +17,6 @@ build:
       libhdf5-dev libfftw3-dev build-essential
   - pip3 install poetry wheel
   - pip3 install numpy
-  - poetry install
   - python setup.py bdist_wheel
   artifacts:
     expire_in: 2 months
