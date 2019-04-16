@@ -10,7 +10,7 @@ build:
   stage: build
   image: python:3.7
   only:
-  - master
+  - tags
   script:
   - apt-get update -qq
       && apt-get install -y --no-install-recommends
@@ -28,7 +28,7 @@ release:tag:
   stage: release
   image: python:3.7
   only:
-  - master
+  - tags
   script:
   - pip3 install gitlab-release
   - gitlab-release --link-artifact ./dist/*whl
