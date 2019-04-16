@@ -11,13 +11,10 @@ build:
   only:
   - master
   script:
-  - apt-get update -qq \
-    && apt-get install -y --no-install-recommends \
-    gfortran \
-    swig \
-    libatlas-dev liblapack-dev \
-    libhdf5-dev libfftw3-dev \
-    build-essential
+  - apt-get update -qq
+      && apt-get install -y --no-install-recommends
+      gfortran swig libatlas-dev liblapack-dev
+      libhdf5-dev libfftw3-dev build-essential
   - pip3 install poetry wheel
   - pip3 install numpy
   - poetry install
