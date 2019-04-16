@@ -4,6 +4,7 @@ stages:
 
 variables:
   CFLAGS: -I/usr/include/hdf5/serial
+  GIT_SUBMODULE_STRATEGY: recursive
 
 build:
   stage: build
