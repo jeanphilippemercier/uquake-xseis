@@ -9,6 +9,10 @@ from xseis2 import __version__
 
 # os.environ["CXX"] = "g++-7"
 
+requirements = [
+    'numpy',
+]
+
 libcnpy = ('cnpy', {'sources': ['cnpy/cnpy.cpp']})
 
 ext_modules = cythonize([
