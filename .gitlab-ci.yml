@@ -17,10 +17,7 @@ build:
     swig \
     libatlas-dev liblapack-dev \
     libhdf5-dev libfftw3-dev \
-    libxft-dev \
-    libxml2-dev libxslt-dev zlib1g-dev \
-    libpng-dev \
-    libxext-dev build-essential
+    build-essential
   - pip3 install poetry wheel
   - poetry install
   - python setup.py bdist_wheel
