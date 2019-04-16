@@ -31,6 +31,7 @@ release:
   - master
   script:
   - pip3 install gitlab-release
+  - gitlab-release --link-artifact ./dist/*whl
   artifacts:
     paths:
     - dist/*whl
