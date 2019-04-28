@@ -99,7 +99,7 @@ def sigs(d, shifts=None, labels=None, picks=None, spacing=1.2, **kwargs):
 				yv = [shifts[j] - size, shifts[j] + size]
 				plt.plot(xv, yv, color=clr)
 			leg.append(mlines.Line2D([], [], color=clr, label="picks_%d" % i))
-		
+
 		plt.legend(handles=leg)
 
 
@@ -123,18 +123,21 @@ def v2color(vals):
 	return clrs
 
 
-def stations(locs, ckeys=None, vals=None, alpha=0.3, lstep=100, pkeys=None, plocs=None):
+def stations(locs, lvals=None, ckeys=None, cvals=None, alpha=0.3, lstep=100, pkeys=None, plocs=None):
 	locs = locs[:, :2]
 	x, y = locs.T
-	plt.scatter(x, y, alpha=alpha, s=6, zorder=0)
+	if lvals is not None:
+		plt.scatter(x, y, alpha=alpha, c=lvals, s=100, zorder=0)
+	else:
+		plt.scatter(x, y, alpha=alpha, s=6, zorder=0)
 	# x, y, z = locs[2900:3100].T
 	if lstep != 0:
 		for i in range(0, locs.shape[0], lstep):
 			plt.text(x[i], y[i], i)
 
 	if ckeys is not None:
-		if vals is not None:
-			clrs = v2color(vals)
+		if cvals is not None:
+			clrs = v2color(cvals)
 			for i, ck in enumerate(ckeys):
 				x, y = locs[ck].T
 				plt.plot(x, y, alpha=alpha, color=clrs[i], linewidth=2)

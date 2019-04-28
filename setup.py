@@ -5,8 +5,8 @@ from distutils.core import Extension, setup
 import numpy as np
 from Cython.Build import cythonize
 from Cython.Distutils import build_ext
-
 # os.environ["CXX"] = "g++-7"
+
 
 libcnpy = ('cnpy', {'sources': ['cnpy/cnpy.cpp']})
 

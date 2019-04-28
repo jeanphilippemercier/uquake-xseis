@@ -6,6 +6,7 @@ from scipy.fftpack import fft, ifft, fftfreq
 from scipy.signal import sosfilt, zpk2sos, iirfilter
 import os
 import glob
+import itertools
 
 # import pickle
 # import matplotlib.pyplot as plt
@@ -15,6 +16,13 @@ import glob
 # import datetime
 # from scipy.signal import sosfilt, zpk2sos, iirfilter
 
+
+def acausal(data):
+    return np.fliplr(data[:, :data.shape[1] // 2])
+
+
+def causal(data):
+    return data[:, data.shape[1] // 2:]
 
 
 def ricker(freq, sr, length=0.2):
@@ -526,6 +534,47 @@ def cross_corr(sig1, sig2, norm=True, pad=False, phase_only=False, phat=False):
     return np.roll(cc, len(cc) // 2)
 
 
+def unique_pairs(keys):
+    return np.array(list(itertools.combinations(keys, 2)))
+
+
+def pairs_with_autocorr(keys):
+    return np.array(list(itertools.combinations_with_replacement(keys, 2)))
+
+
+def combos_between(keys1, keys2):
+    return np.array(list(itertools.product(keys1, keys2)))
+
+
+def dist_diff_ckeys(ckeys, locs):
+    return np.linalg.norm(np.diff(locs[ckeys], axis=1).reshape(-1, 3), axis=1)
+
+
+def xcorr_ckeys(dat, ckeys, norm=True):
+
+    ncc = len(ckeys)
+    nsta, wlen = dat.shape
+    padlen = wlen * 2
+    # nfreq = int(padlen // 2 + 1)
+    # fstack = np.zeros((ncc, nfreq), dtype=np.complex64)
+    stack = np.zeros((ncc, padlen), dtype=np.float32)
+
+    fdat = np.fft.rfft(dat, axis=1, n=padlen)
+    if norm:
+        for irow in range(fdat.shape[0]):
+            fdat[irow] /= np.sqrt(energy_freq(fdat[irow]))
+            # fdat[irow] = filt * xutil.phase(fdat[irow])
+
+    for j, ckey in enumerate(ckeys):
+        k1, k2 = ckey
+        stack[j] = np.fft.irfft(np.conj(fdat[k1]) * fdat[k2])
+
+    # stack = np.fft.irfft(fstack)
+    stack = np.roll(stack, padlen // 2, axis=1)
+
+    return stack
+
+
 # def xcorr_freq(sig1f, sig2f):
 #   """Cross-correlate two signals."""
 
@@ -827,3 +876,8 @@ def envelope(data):
     # dd = np.linalg.norm(np.diff(locs[ck2], axis=1).reshape(-1, 3), axis=1)
     # # plt.hist(dd, bins=100)
     # cki = np.where(dd < 1000)[0]
+
+def build_checkerboard(w, h):
+    re = np.r_[w * [0, 1]]              # even-numbered rows
+    ro = np.r_[w * [1, 0]]              # odd-numbered rows
+    return np.row_stack(h * (re, ro))

@@ -43,7 +43,7 @@ def linear_regression(xv, yv, weights, outlier_sd=None):
             c, stats = polyfit(xv[ikeep], yv[ikeep], 1, full=True, w=weights[ikeep])
             yint, slope = c
             residual = stats[0][0] / len(xv)
-            print("stdev residuals: %.3f")
+            print("stdev residuals: %.3f" % residual)
 
     return yint, slope, residual, ikeep
 
