@@ -1,0 +1,37 @@
+stages:
+- build
+- release
+
+variables:
+  CFLAGS: -I/usr/include/hdf5/serial
+  GIT_SUBMODULE_STRATEGY: recursive
+
+build:
+  stage: build
+  image: python:3.7
+  only:
+  - tags
+  script:
+  - apt-get update -qq
+      && apt-get install -y --no-install-recommends
+      gfortran swig libatlas-dev liblapack-dev
+      libhdf5-dev libfftw3-dev build-essential
+  - pip3 install poetry wheel
+  - pip3 install numpy cython
+  - python setup.py bdist_wheel
+  artifacts:
+    expire_in: 2 months
+    paths:
+    - dist/
+
+release:tag:
+  stage: release
+  image: python:3.7
+  only:
+  - tags
+  script:
+  - pip3 install gitlab-release
+  - gitlab-release --link-artifact ./dist/*whl
+  artifacts:
+    paths:
+    - dist/*whl

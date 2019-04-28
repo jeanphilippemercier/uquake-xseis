@@ -1,12 +1,22 @@
-from setuptools import find_packages
+import setuptools
 from distutils.command.build_clib import build_clib
 from distutils.core import Extension, setup
 
 import numpy as np
 from Cython.Build import cythonize
 from Cython.Distutils import build_ext
+
 # os.environ["CXX"] = "g++-7"
 
+__version__ = "0.1.1"
+
+requirements = [
+    'numpy'
+]
+
+setup_requires = [
+    'cython'
+]
 
 libcnpy = ('cnpy', {'sources': ['cnpy/cnpy.cpp']})
 
@@ -25,7 +35,7 @@ ext_modules = cythonize([
             'fftw3', 'fftw3f', 'fftw3l', 'fftw3_threads', 'fftw3f_threads',
             'fftw3l_threads', 'z'
         ],
-        include_dirs=[np.get_include(), 'xseis2/include'],
+        include_dirs=[np.get_include(), 'xseis2/include', 'cnpy'],
     )
 ])
 
@@ -33,12 +43,14 @@ ext_modules = cythonize([
 def main():
     setup(
         name='xseis2',
+        install_requires=requirements,
         libraries=[libcnpy],
+        version=__version__,
         cmdclass={
             'build_clib': build_clib,
             'build_ext': build_ext
         },
-        packages=find_packages(exclude=['tests']),
+        packages=setuptools.find_packages(exclude=['tests']),
         ext_modules=ext_modules)
 
 
