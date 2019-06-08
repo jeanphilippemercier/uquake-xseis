@@ -151,7 +151,7 @@ void SearchOnePhase(
 	// float pair_dist_max = 2000;
 	omp_set_num_threads(nthreads);
 	std::string const HOME = std::getenv("SPP_COMMON");
-	std::string file_wisdom = HOME + "fftw3_wisdom.txt";
+	std::string file_wisdom = HOME + "/fftw3_wisdom.txt";
 	fftwf_import_wisdom_from_filename(&file_wisdom[0]);
 	// std::cout << "file_wisdom: " << file_wisdom << "\n";
 
