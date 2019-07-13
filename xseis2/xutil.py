@@ -538,6 +538,20 @@ def unique_pairs(keys):
     return np.array(list(itertools.combinations(keys, 2)))
 
 
+def ckeys_remove_intersta(ckeys, names):
+    ikeep = []
+    for i, ck in enumerate(names[ckeys]):
+        n1, n2 = ck
+        sta1 = ck[0].split('.')[0]
+        sta2 = ck[1].split('.')[0]
+        if sta1 == sta2:
+            continue
+        else:
+            ikeep.append(i)
+
+    return ckeys[np.array(ikeep)]
+
+
 def pairs_with_autocorr(keys):
     return np.array(list(itertools.combinations_with_replacement(keys, 2)))
 
@@ -571,6 +585,62 @@ def xcorr_ckeys(dat, ckeys, norm=True):
 
     # stack = np.fft.irfft(fstack)
     stack = np.roll(stack, padlen // 2, axis=1)
+
+    return stack
+
+
+def xcorr_ckeys_stack_slices(rawdat, ckeys, cclen, keeplag, stepsize=None, whiten_freqs=None, sr=None, onebit=False):
+
+    cclen = int(cclen)
+
+    nchan, nsamp = rawdat.shape
+    slices = build_slice_inds(0, nsamp, cclen, stepsize=stepsize)
+    # xvals = np.mean(slices, axis=1)
+
+    # ncc = int(slices[-1][1] / stacklen)
+    ncc = len(ckeys)
+    padlen = cclen * 2
+    nfreq = int(padlen // 2 + 1)
+
+    whiten_win = None
+    if whiten_freqs is not None:
+        whiten_win = freq_window(whiten_freqs, padlen, sr)
+
+    fstack = np.zeros((ncc, nfreq), dtype=np.complex64)
+
+    for i, sl in enumerate(slices):
+        # print(f"{i} / {len(slices)}")
+        dat = rawdat[:, sl[0]:sl[1]].copy()
+
+        if onebit is True:
+            dat = np.sign(dat)
+
+        fdat = np.fft.rfft(dat, axis=1, n=padlen)
+
+        if whiten_win is not None:
+            for irow in range(fdat.shape[0]):
+                fdat[irow] = whiten_win * phase(fdat[irow])
+        else:
+            for irow in range(fdat.shape[0]):
+                fdat[irow] /= np.sqrt(energy_freq(fdat[irow]))
+
+        # dat0 = np.fft.irfft(fdat, axis=1)
+        # norm = xutil.energy_freq(fdat[0])
+
+        for j, ckey in enumerate(ckeys):
+            k1, k2 = ckey
+            # stack[j] = np.fft.irfft(np.conj(fdat[k1]) * fdat[k2])
+            fstack[j] += np.conj(fdat[k1]) * fdat[k2]
+
+    # stack = np.fft.irfft(fstack, axis=1)
+    # stack = np.roll(stack, padlen // 2, axis=1)
+    keeplag = int(keeplag)
+    stack = np.zeros((ncc, keeplag * 2), dtype=np.float32)
+
+    for i in range(ncc):
+        cc = np.fft.irfft(fstack[i]) / len(slices)
+        stack[i, :keeplag] = cc[-keeplag:]
+        stack[i, keeplag:] = cc[:keeplag]
 
     return stack
 

@@ -48,6 +48,54 @@ def linear_regression(xv, yv, weights, outlier_sd=None):
     return yint, slope, residual, ikeep
 
 
+def linear_regression2(xv, yv, weights, outlier_val=0.0025):
+    ikeep = np.where(np.abs(yv / xv) < outlier_val)[0]
+    c, stats = polyfit(xv[ikeep], yv[ikeep], 1, full=True, w=weights[ikeep])
+    yint, slope = c
+    residual = stats[0][0] / len(xv)
+
+    return yint, slope, residual, ikeep
+
+
+def linear_regression3(xv, yv, weights):
+    XX = np.vstack((xv, np.ones_like(xv))).T
+    # out = np.linalg.lstsq(XX[:, :-1], yv, rcond=None)
+    # out = np.linalg.lstsq(XX, yv, rcond=None)
+    out = np.linalg.lstsq(XX * weights[:, None], yv * weights, rcond=None)
+    print(out)
+    c = out[0]
+    residual = out[1] / len(xv)
+    slope, yint = c
+
+    return yint, slope, residual
+
+
+def linear_regression4(xv, yv, weights):
+    out = np.linalg.lstsq(xv[:, None] * weights[:, None], yv * weights, rcond=None)
+    print(out)
+    slope = out[0][0]
+    yint = 0
+    residual = out[1] / len(xv)
+
+    return yint, slope, residual
+
+
+def linear_regression_yzero(xv, yv, weights):
+    XX = np.vstack((xv, np.ones_like(xv))).T
+    # out = np.linalg.lstsq(XX[:, :-1], yv, rcond=None)
+    out = np.linalg.lstsq(XX, yv, rcond=None)
+    # c, stats =
+    print(out)
+    c = out[0]
+    residual = out[1] / len(xv)
+
+    # # c, stats = polyfit(xv[ikeep], yv[ikeep], 1, full=True, w=weights[ikeep])
+    # yint, slope = c
+    slope, yint = c
+    # residual = stats[0][0]
+    return yint, slope, residual
+
+
 def windowed_fft(sig, slices, sr, corner_freqs, taper_percent=0.2):
 
     # print("num slices", len(slices))

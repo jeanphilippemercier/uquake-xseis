@@ -37,6 +37,9 @@ nscale = 0.02
 noise1 = xutil.noise1d(nsamp, cfreqs_noise, sr, scale=nscale, taplen=0.01)
 noise2 = xutil.noise1d(nsamp, cfreqs_noise, sr, scale=nscale, taplen=0.01)
 # plt.plot(time, sig1)
+plt.plot(sig1)
+plt.plot(sig2)
+
 sig1 += noise1
 sig2 += noise2
 # plt.plot(time, noise1)
@@ -44,7 +47,6 @@ sig2 += noise2
 # plt.plot(time, sig2)
 # xplot.freq(sig1, sr)
 # xplot.freq(noise1, sr)
-# plt.plot(sig1)
 
 #########################
 
