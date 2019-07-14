@@ -589,6 +589,67 @@ def xcorr_ckeys(dat, ckeys, norm=True):
     return stack
 
 
+def xcorr_pair_stack_slices(sig1, sig2, cclen, stacklen, keeplag, stepsize=None, whiten_freqs=None, sr=None, onebit=False):
+
+    cclen = int(cclen)
+    keeplag = int(keeplag)
+    slices = build_slice_inds(0, len(sig1), cclen, stepsize=stepsize)
+    xvals = np.mean(slices, axis=1)
+
+    ncc = int(slices[-1][1] / stacklen)
+    padlen = cclen * 2
+    nfreq = int(padlen // 2 + 1)
+    # ccs = np.zeros((ncc, padlen), dtype=np.float32)
+    keeplen = int(keeplag * 2)
+    ccs = np.zeros((ncc, keeplen), dtype=np.float32)
+
+    win = None
+    if whiten_freqs is not None:
+        win = freq_window(whiten_freqs, padlen, sr)
+
+    step = slices[1][0] - slices[0][0]
+    assert(stacklen % step == 0)
+    chunksize = stacklen // step
+    print(step, chunksize)
+    print(ncc)
+
+    fcc = np.zeros(nfreq, dtype=np.complex64)
+    tmp_nstack = 0
+    cix = 0
+
+    for i, sl in enumerate(slices):
+        print(f"{i} / {len(slices)}")
+        win1 = sig1[sl[0]:sl[1]]
+        win2 = sig2[sl[0]:sl[1]]
+
+        if onebit is True:
+            win1 = np.sign(win1)
+            win2 = np.sign(win2)
+
+        f1 = np.fft.rfft(win1, n=padlen)
+        f2 = np.fft.rfft(win2, n=padlen)
+
+        if win is not None:
+            f1 = win * phase(f1)
+            f2 = win * phase(f2)
+
+        f1 /= np.sqrt(energy_freq(f1))
+        f2 /= np.sqrt(energy_freq(f2))
+        fcc += np.conj(f1) * f2
+        tmp_nstack += 1
+
+        if tmp_nstack >= chunksize:
+            cc = np.fft.irfft(fcc) / tmp_nstack
+            ccs[cix, :keeplag] = cc[-keeplag:]
+            ccs[cix, keeplag:] = cc[:keeplag]
+
+            fcc.fill(0)
+            tmp_nstack = 0
+            cix += 1
+
+    return xvals, ccs
+
+
 def xcorr_ckeys_stack_slices(rawdat, ckeys, cclen, keeplag, stepsize=None, whiten_freqs=None, sr=None, onebit=False):
 
     cclen = int(cclen)
@@ -613,6 +674,7 @@ def xcorr_ckeys_stack_slices(rawdat, ckeys, cclen, keeplag, stepsize=None, white
         dat = rawdat[:, sl[0]:sl[1]].copy()
 
         if onebit is True:
+            dat = bandpass(dat, whiten_freqs[[0, -1]], sr)
             dat = np.sign(dat)
 
         fdat = np.fft.rfft(dat, axis=1, n=padlen)
@@ -951,3 +1013,31 @@ def build_checkerboard(w, h):
     re = np.r_[w * [0, 1]]              # even-numbered rows
     ro = np.r_[w * [1, 0]]              # odd-numbered rows
     return np.row_stack(h * (re, ro))
+
+
+def nan_helper(y):
+    """Helper to handle indices and logical indices of NaNs.
+
+    Input:
+        - y, 1d numpy array with possible NaNs
+    Output:
+        - nans, logical indices of NaNs
+        - index, a function, with signature indices= index(logical_indices),
+          to convert logical indices of NaNs to 'equivalent' indices
+    Example:
+        >>> # linear interpolation of NaNs
+        >>> nans, x= nan_helper(y)
+        >>> y[nans]= np.interp(x(nans), x(~nans), y[~nans])
+    """
+
+    return np.isnan(y), lambda z: z.nonzero()[0]
+
+
+def nans_interp(data, threshold=.05):
+    nans, x = nan_helper(data)
+    number_of_nans = data[nans].size
+    if number_of_nans > 0:
+        if float(number_of_nans) / len(data) < threshold:
+            data[nans] = np.interp(x(nans), x(~nans), data[~nans])
+        else:
+            data[:] = 0

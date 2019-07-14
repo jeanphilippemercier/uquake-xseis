@@ -1,3 +1,29 @@
+* Todo
+- [ ] Reasonable individual measurements (way to check these easily)
+
+- [ ] join ckeys
+- [ ] string search ckeys
+
+
+* Settings
+
+dec_samplerate = 1000.0
+cclen_sec = 10
+keeplag = 1
+whiten_freqs = np.array([60, 80, 400, 450])
+measure_freqs = np.array([80, 100, 220, 240])
+vs_estimate = 3200.0 # for coda win start
+maxlag_measure_sec = 1.0 # for coda win end
+sliding_win_len = 0.03
+stepsize =
+outlier_thresh = 0.002
+
+
+
+
+
+
+
 * Questions
 - outlier affecting linear fit
 - how noisy individual ccf measurements compared to avg
