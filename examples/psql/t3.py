@@ -9,11 +9,18 @@ import psycopg2
 from psycopg2.extras import execute_values
 from psycopg2.sql import SQL, Identifier
 
+from microquake.io.postgres import Postgres
 
 plt.ion()
 
+db = Postgres()
+cur = db.cur
+cur.execute('DROP TABLE IF EXISTS sgrams;')
+
+
 conn = psycopg2.connect("dbname=tutorial user=postgres password=postgres host=localhost")
 cur = conn.cursor()
+
 
 # cur.execute('DROP TABLE "sgrams";')
 cur.execute('DROP TABLE IF EXISTS sgrams;')

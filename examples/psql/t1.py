@@ -31,7 +31,7 @@ cur = conn.cursor()
 # cur.execute('DROP TABLE "sgrams";')
 cur.execute('DROP TABLE IF EXISTS sgrams;')
 
-cur.execute("CREATE TABLE sgrams (time TIMESTAMPTZ NOT NULL);")
+cur.execute("CREATE TABLE sgrams (time TIMESTAMPTZ PRIMARY KEY NOT NULL);")
 cur.execute("SELECT create_hypertable('sgrams', 'time');")
 
 nchan = 300
@@ -69,6 +69,22 @@ execute_values(cur, 'INSERT INTO sgrams VALUES %s', values)
 end = time.time()
 eps = end - start
 print(eps)
+
+
+
+
+cur.execute("CREATE TABLE sgrams (time TIMESTAMPTZ PRIMARY KEY NOT NULL);")
+cur.execute("SELECT create_hypertable('sgrams', 'time');")
+
+#....#
+
+for name in column_names:
+    cur.execute("ALTER TABLE sgrams ADD COLUMN %s REAL;" % (name))
+#....#
+
+# inserts 1 second of data (6000 rows of 300 values each)
+execute_values(cur, 'INSERT INTO sgrams VALUES %s', data)
+
 
 
 # cur.execute("SELECT create_hypertable('sgrams', 'time');")
