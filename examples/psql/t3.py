@@ -23,7 +23,10 @@ cur = conn.cursor()
 
 
 # cur.execute('DROP TABLE "sgrams";')
+cur.execute('DROP TABLE IF EXISTS xcorrs;')
 cur.execute('DROP TABLE IF EXISTS sgrams;')
+cur.execute('DROP TABLE IF EXISTS vchange;')
+cur.execute('DROP TABLE IF EXISTS users;')
 
 cur.execute("CREATE TABLE sgrams (time TIMESTAMPTZ PRIMARY KEY NOT NULL);")
 cur.execute("SELECT create_hypertable('sgrams', 'time');")
@@ -47,7 +50,11 @@ for name in chans:
 
 start = time.time()
 i = 2
-cur.execute(SQL("INSERT INTO sgrams(time, {}) VALUES (%s, %s);").format(Identifier(chans[i])), (times[0], list(dat[i])))
+cur.execute(SQL("INSERT INTO sgrams(time, {0}) VALUES (%s, %s) ON CONFLICT (time) DO UPDATE SET {0} = EXCLUDED.{0};").format(Identifier(chans[i])), (times[0], list(dat[i])))
+
+# cur.execute(SQL("INSERT INTO sgrams(time, {}) VALUES (%s, %s) ON CONFLICT (time) DO UPDATE SET {} = EXCLUDED.{});").format(Identifier(chans[i], chans[i], chans[i])), (times[0], list(dat[i])))
+
+# cur.execute(SQL("INSERT INTO sgrams(time, {}) VALUES (%s, %s);").format(Identifier(chans[i])), (times[0], list(dat[i])))
 end = time.time()
 print(end - start)
 
@@ -55,9 +62,11 @@ start = time.time()
 
 for i, sig in enumerate(dat):
     print(i)
-    cur.execute(SQL("INSERT INTO sgrams(time, {}) VALUES (%s, %s);").format(Identifier(chans[i])), (times[0], list(dat[i])))
-    # cur.execute("INSERT INTO sgrams(time, chan1) VALUES (%s, %s);", (times[0], list(sig)))
-    # cur.execute(SQL("INSERT INTO sgrams(time, {}) VALUES (%s, %s);").format(Identifier(chans[i])), (times[0], list(sig)))
+    cur.execute(SQL("INSERT INTO sgrams(time, {0}) VALUES (%s, %s) ON CONFLICT (time) DO UPDATE SET {0} = EXCLUDED.{0};").format(Identifier(chans[i])), (times[0], list(dat[i])))
+
+    # cur.execute(SQL("INSERT INTO sgrams(time, {}) VALUES (%s, %s) ON CONFLICT (time) DO UPDATE SET ({}) = (EXCLUDED.{}) = ;").format(Identifier(chans[i])), (times[0], list(dat[i])))
+    # cur.execute(SQL("INSERT INTO sgrams(time, {}) VALUES (%s, %s);").format(Identifier(chans[i])), (times[0], list(dat[i])))
+
 end = time.time()
 print(end - start)
 
@@ -66,7 +75,7 @@ print(end - start)
 # SQL("INSERT INTO sgrams(time, {}) VALUES (%s, %s);").format(Identifier(chans[0]))
 
 
-cur.execute("SELECT chan0 FROM sgrams ORDER BY time ASC;")
+cur.execute("SELECT chan2 FROM sgrams ORDER BY time ASC;")
 cur.execute("SELECT chan298 FROM sgrams ORDER BY time ASC;")
 cur.execute("SELECT chan1, chan2 FROM sgrams ORDER BY time ASC;")
 cur.execute("SELECT chan288, chan289 FROM sgrams ORDER BY time ASC;")

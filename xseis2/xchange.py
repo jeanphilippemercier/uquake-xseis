@@ -15,7 +15,52 @@ import matplotlib.pyplot as plt
 from datetime import timedelta
 
 
-def xcorr_stack_slices(hstream, starttime, endtime, chans, cclen, keeplag, whiten_freqs, onebit=True):
+def xcorr_stack_slices(datgen, chans, cclen, sr, keeplag, whiten_freqs, onebit=True):
+
+    # slices = xutil.build_slice_inds(i0, i1, cclen, stepsize=stepsize)
+    ckeys = xutil.unique_pairs(np.arange(len(chans)))
+    ckeys = xutil.ckeys_remove_intersta(ckeys, chans)
+
+    ncc = len(ckeys)
+    padlen = int(cclen * sr * 2)
+    nfreq = int(padlen // 2 + 1)
+
+    whiten_win = None
+    if whiten_freqs is not None:
+        whiten_win = xutil.freq_window(whiten_freqs, padlen, sr)
+
+    fstack = np.zeros((ncc, nfreq), dtype=np.complex64)
+
+    nstack = 0
+    for dat in datgen:
+        if onebit is True:
+            dat = xutil.bandpass(dat, whiten_freqs[[0, -1]], sr)
+            dat = np.sign(dat)
+
+        fdat = np.fft.rfft(dat, axis=1, n=padlen)
+
+        for irow in range(fdat.shape[0]):
+            fdat[irow] = whiten_win * xutil.phase(fdat[irow])
+
+        for j, ckey in enumerate(ckeys):
+            k1, k2 = ckey
+            # stack[j] = np.fft.irfft(np.conj(fdat[k1]) * fdat[k2])
+            fstack[j] += np.conj(fdat[k1]) * fdat[k2]
+
+        nstack += 1
+
+    nlag = int(keeplag * sr)
+    stack = np.zeros((ncc, nlag * 2), dtype=np.float32)
+
+    for i in range(ncc):
+        cc = np.real(np.fft.irfft(fstack[i])) / nstack
+        stack[i, :nlag] = cc[-nlag:]
+        stack[i, nlag:] = cc[:nlag]
+
+    return stack, ckeys
+
+
+def xcorr_stack_slices2(hstream, starttime, endtime, chans, cclen, keeplag, whiten_freqs, onebit=True):
 
     # slices = xutil.build_slice_inds(i0, i1, cclen, stepsize=stepsize)
     sr = hstream.samplerate

@@ -32,7 +32,7 @@ cur = conn.cursor()
 cur.execute('DROP TABLE IF EXISTS sgrams;')
 
 cur.execute("CREATE TABLE sgrams (time TIMESTAMPTZ PRIMARY KEY NOT NULL);")
-cur.execute("SELECT create_hypertable('sgrams', 'time');")
+# cur.execute("SELECT create_hypertable('sgrams', 'time');")
 
 nchan = 300
 nsamp = 6000 * 1

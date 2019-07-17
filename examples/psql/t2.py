@@ -38,6 +38,10 @@ chans = ["chan%d" % i for i in range(nchan)]
 for name in chans:
     cur.execute("ALTER TABLE sgrams ADD COLUMN %s REAL[];" % (name))
 
+
+cur.execute("select * FROM sgrams")
+colnames = [desc[0] for desc in cur.description]
+
 start = time.time()
 i = 2
 cur.execute(SQL("INSERT INTO sgrams(time, {}) VALUES (%s, %s);").format(Identifier(chans[i])), (times[0], list(dat[i])))
