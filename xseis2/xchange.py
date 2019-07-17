@@ -15,6 +15,7 @@ import matplotlib.pyplot as plt
 from datetime import timedelta
 
 
+
 def xcorr_stack_slices(datgen, chans, cclen, sr, keeplag, whiten_freqs, onebit=True):
 
     # slices = xutil.build_slice_inds(i0, i1, cclen, stepsize=stepsize)
@@ -173,7 +174,7 @@ def linear_regression3(xv, yv, weights):
 
 def linear_regression4(xv, yv, weights):
     out = np.linalg.lstsq(xv[:, None] * weights[:, None], yv * weights, rcond=None)
-    print(out)
+    # print(out)
     slope = out[0][0]
     yint = 0
     residual = out[1] / len(xv)
@@ -197,6 +198,38 @@ def linear_regression_yzero(xv, yv, weights):
     return yint, slope, residual
 
 
+def dvv(cc1, cc2, sr, wlen, cfreqs, coda_start, coda_end, interp_factor=100, outlier_clip=0.2):
+
+    assert(len(cc1) == len(cc2))
+    hl = len(cc1) // 2
+    iwin = [hl - coda_end, hl + coda_end]
+
+    stepsize = wlen // 4
+    slices = xutil.build_slice_inds(iwin[0], iwin[1], wlen, stepsize=stepsize)
+    print("num slices", len(slices))
+
+    # %timeit fwins1, filt = xchange.windowed_fft(sig1, slices, sr, cfreqs)
+    fwins1, filt = windowed_fft(cc1, slices, sr, cfreqs)
+    fwins2, filt = windowed_fft(cc2, slices, sr, cfreqs)
+    imax, coh = measure_shift_fwins_cc(fwins1, fwins2, interp_factor=interp_factor).T
+
+    print("mean coh %.3f" % np.mean(coh))
+
+    xv = np.mean(slices, axis=1) - hl
+
+    outlier_val = outlier_clip / 100
+    is_out = np.abs(imax / xv) < outlier_val
+    ik = np.where((np.abs(xv) > coda_start) & (np.abs(imax / xv) < outlier_val))[0]
+    # nkeep = (len(ik) / len(xv)) * 100
+    print(f"non-outlier: {np.sum(is_out) / len(is_out) * 100:.2f}%")
+
+    yint, slope, res = linear_regression4(xv[ik], imax[ik], coh[ik] ** 2)
+
+    print("tt_change: %.5f%% ss_res: %.4e " % (slope * 100, res))
+
+    return slope * 100, res[0]
+
+
 def windowed_fft(sig, slices, sr, corner_freqs, taper_percent=0.2):
 
     # print("num slices", len(slices))
@@ -215,6 +248,7 @@ def windowed_fft(sig, slices, sr, corner_freqs, taper_percent=0.2):
     for i, sl in enumerate(slices):
         fsig = np.fft.rfft(sig[sl[0]:sl[1]] * taper, n=pad)
         fdat[i] = xutil.norm_energy_freq(filt * xutil.phase(fsig))
+        # fdat[i] = xutil.norm_energy_freq(fsig)
 
     return fdat, filt
 
@@ -224,7 +258,7 @@ def measure_shift_fwins_cc(fwins1, fwins2, interp_factor=1):
     nwin, nfreq = fwins1.shape
     pad = nfreq * 2 - 1
 
-    out = np.zeros((nwin, 2))
+    out = np.zeros((nwin, 2), dtype=np.float32)
 
     for i, (w1, w2) in enumerate(zip(fwins1, fwins2)):
         ccf = np.conj(w1) * w2

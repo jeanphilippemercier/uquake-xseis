@@ -183,7 +183,7 @@ def im_freq(d, sr, norm=False, xlims=None):
 
 def im(d, norm=True, savedir=None, tkey='im_raw', cmap='viridis', aspect='auto', extent=None, locs=None, labels=None, title=None):
 
-	fig = plt.figure(figsize=(10, 7), facecolor='white')
+	fig = plt.figure(figsize=(12, 8), facecolor='white')
 	# if times is not None:
 	# 	extent = [times[0], times[-1], 0, d.shape[0]]
 
@@ -206,7 +206,7 @@ def im(d, norm=True, savedir=None, tkey='im_raw', cmap='viridis', aspect='auto',
 		plt.title(title)
 	# manager = plt.get_current_fig_manager()
 	# manager.resize(*manager.window.maxsize())
-	# plt.tight_layout()
+	plt.tight_layout()
 	savefig(fig, savedir, tkey)
 
 
