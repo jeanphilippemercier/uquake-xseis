@@ -15,27 +15,50 @@ import matplotlib.pyplot as plt
 from datetime import timedelta
 
 
+def ckey_dists(ckeys):
 
-def xcorr_stack_slices(datgen, chans, cclen, sr, keeplag, whiten_freqs, onebit=True):
+    from spp.core.settings import settings
+    sites = [station.code for station in settings.inventory.stations()]
+    site_locs = [station.loc for station in settings.inventory.stations()]
+    ldict = dict(zip(sites, site_locs))
 
-    # slices = xutil.build_slice_inds(i0, i1, cclen, stepsize=stepsize)
+    dists = dict()
+    for ck in ckeys:
+        c1, c2 = ck.split('_')
+        dd = xutil.dist(ldict[c1[:-2]], ldict[c2[:-2]])
+        dists[ck] = dd
+    return dists
+
+
+def xcorr_stack_slices(datgen, chans, cclen, sr_raw, sr_dec, keeplag, whiten_freqs, onebit=True):
+
     ckeys = xutil.unique_pairs(np.arange(len(chans)))
     ckeys = xutil.ckeys_remove_intersta(ckeys, chans)
 
     ncc = len(ckeys)
-    padlen = int(cclen * sr * 2)
+    padlen = int(cclen * sr_dec * 2)
     nfreq = int(padlen // 2 + 1)
+    whiten_freqs = np.array(whiten_freqs)
+
+    dec_factor = None
+    if not np.allclose(sr_raw, sr_dec):
+        dec_factor = int(sr_raw / sr_dec)
 
     whiten_win = None
     if whiten_freqs is not None:
-        whiten_win = xutil.freq_window(whiten_freqs, padlen, sr)
+        whiten_win = xutil.freq_window(whiten_freqs, padlen, sr_dec)
 
     fstack = np.zeros((ncc, nfreq), dtype=np.complex64)
 
     nstack = 0
     for dat in datgen:
+
+        dat = xutil.bandpass(dat, whiten_freqs[[0, -1]], sr_raw)
+
+        if dec_factor is not None:
+            dat = dat[:, ::dec_factor]
+
         if onebit is True:
-            dat = xutil.bandpass(dat, whiten_freqs[[0, -1]], sr)
             dat = np.sign(dat)
 
         fdat = np.fft.rfft(dat, axis=1, n=padlen)
@@ -50,7 +73,7 @@ def xcorr_stack_slices(datgen, chans, cclen, sr, keeplag, whiten_freqs, onebit=T
 
         nstack += 1
 
-    nlag = int(keeplag * sr)
+    nlag = int(keeplag * sr_dec)
     stack = np.zeros((ncc, nlag * 2), dtype=np.float32)
 
     for i in range(ncc):
@@ -227,6 +250,23 @@ def dvv(cc1, cc2, sr, wlen, cfreqs, coda_start, coda_end, interp_factor=100, out
 
     print("tt_change: %.5f%% ss_res: %.4e " % (slope * 100, res))
 
+    # tfit = yint + slope * xv
+    # plt.scatter(xv[ik], imax[ik], c=coh[ik])
+    # plt.colorbar()
+    # mask = np.ones_like(xv, bool)
+    # mask[ik] = False
+    # plt.scatter(xv[mask], imax[mask], c='red', alpha=0.2)
+    # # plt.scatter(xv[ik], imax[ik], c='red', alpha=0.5)
+    # plt.plot(xv, tfit)
+    # # plt.plot(xv, tfit)
+    # plt.title("tt_change: %.3f%% ss_res: %.3f " % (slope * 100, res))
+    # plt.axvline(0, linestyle='--')
+    # alpha = 0.5
+    # # vel = 3200.
+    # # direct = dist / vel * sr
+    # plt.axvline(coda_start, linestyle='--', color='green', alpha=alpha)
+    # plt.axvline(-coda_start, linestyle='--', color='green', alpha=alpha)
+
     return slope * 100, res[0]
 
 
@@ -314,6 +354,21 @@ def stretch(sig, sr, tt_change_percent):
 
     return newsig.astype(sig.dtype)
 
+
+def stretch_sim_ccs(cclen_sec, sr, tt_changes, cfreqs):
+    wlen_sec = cclen_sec / 2
+    ncc = len(tt_changes)
+    nsamp = int(wlen_sec * sr)
+    nsamp_cc = int(wlen_sec * sr * 2)
+    ref_half = xutil.noise1d(nsamp, cfreqs, sr, scale=1, taplen=0.0)
+    ccs = np.zeros((ncc, nsamp_cc), dtype=np.float32)
+
+    for i, tt_change in enumerate(tt_changes):
+        tmp = stretch(ref_half, sr, tt_change)
+        cc = np.concatenate((tmp[::-1], tmp))
+        ccs[i] = cc
+
+    return ccs
 
 # def nextpow2(val):
 #     buf = math.ceil(math.log(val) / math.log(2))
