@@ -552,6 +552,20 @@ def ckeys_remove_intersta(ckeys, names):
     return ckeys[np.array(ikeep)]
 
 
+def ckeys_remove_intersta_str(ckeys):
+    ikeep = []
+    for i, ck in enumerate(ckeys):
+        n1, n2 = ck
+        sta1 = ck[0].split('.')[0]
+        sta2 = ck[1].split('.')[0]
+        if sta1 == sta2:
+            continue
+        else:
+            ikeep.append(i)
+
+    return ckeys[np.array(ikeep)]
+
+
 def pairs_with_autocorr(keys):
     return np.array(list(itertools.combinations_with_replacement(keys, 2)))
 

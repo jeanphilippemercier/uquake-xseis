@@ -2,7 +2,7 @@ import os
 from datetime import datetime, timedelta
 import numpy as np
 
-from sqlalchemy import Table, Column, Integer, String, MetaData, ForeignKey, DateTime, Float, Sequence, ARRAY, LargeBinary
+from sqlalchemy import Table, Column, Integer, String, MetaData, ForeignKey, DateTime, Float, Sequence, ARRAY, LargeBinary, Boolean
 from sqlalchemy.sql import select
 # from sqlalchemy import create_engine
 # from sqlalchemy.orm import sessionmaker
@@ -16,13 +16,13 @@ class VelChange(Base):
 
     id = Column(Integer, primary_key=True)
     time = Column(DateTime)
-    key = Column(String(10))
+    sta = Column(String(10))
     # hours = Column(String(10))
     dvv = Column(Float)
     error = Column(Float)
 
     def __repr__(self):
-        return f"<VelChange({self.time}, {self.cey}, {self.dvv}, {self.error}"
+        return f"<VelChange({self.time}, {self.sta}, {self.dvv}, {self.error}"
 
 
 class XCorr(Base):
@@ -37,3 +37,15 @@ class XCorr(Base):
 
     def __repr__(self):
         return f"<Xcorr({self.time}, {self.ckey}, {self.data}, {self.dvv}, {self.error}"
+
+
+class ChanPair(Base):
+    __tablename__ = 'chanpairs'
+
+    ckey = Column(String(20), primary_key=True)
+    sta1 = Column(String(10))
+    sta2 = Column(String(10))
+    dist = Column(Float)
+
+    def __repr__(self):
+        return f"<ChanPair({self.ckey}, {self.dist:.2f} m"

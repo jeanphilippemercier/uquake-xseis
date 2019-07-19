@@ -154,7 +154,7 @@ def plot_tt_change(xv, imax, coh, yint, slope, res, ik):
     plt.title("tt_change: %.3f%% ss_res: %.3f " % (slope * 100, res))
 
 
-def linear_regression(xv, yv, weights, outlier_sd=None):
+def linear_regression_old(xv, yv, weights, outlier_sd=None):
     c, stats = polyfit(xv, yv, 1, full=True, w=weights)
     yint, slope = c
     residual = stats[0][0] / len(xv)
@@ -195,7 +195,7 @@ def linear_regression3(xv, yv, weights):
     return yint, slope, residual
 
 
-def linear_regression4(xv, yv, weights):
+def linear_regression_zforce(xv, yv, weights):
     out = np.linalg.lstsq(xv[:, None] * weights[:, None], yv * weights, rcond=None)
     # print(out)
     slope = out[0][0]
@@ -221,9 +221,14 @@ def linear_regression_yzero(xv, yv, weights):
     return yint, slope, residual
 
 
-def dvv(cc1, cc2, sr, wlen, cfreqs, coda_start, coda_end, interp_factor=100, outlier_clip=0.2):
+def dvv(cc1, cc2, sr, wlen_sec, cfreqs, coda_start_sec, coda_end_sec, interp_factor=100, dvv_outlier_clip=None):
 
     assert(len(cc1) == len(cc2))
+
+    wlen = int(wlen_sec * sr)
+    coda_start = int(coda_start_sec * sr)
+    coda_end = int(coda_end_sec * sr)
+
     hl = len(cc1) // 2
     iwin = [hl - coda_end, hl + coda_end]
 
@@ -240,13 +245,18 @@ def dvv(cc1, cc2, sr, wlen, cfreqs, coda_start, coda_end, interp_factor=100, out
 
     xv = np.mean(slices, axis=1) - hl
 
-    outlier_val = outlier_clip / 100
-    is_out = np.abs(imax / xv) < outlier_val
-    ik = np.where((np.abs(xv) > coda_start) & (np.abs(imax / xv) < outlier_val))[0]
-    # nkeep = (len(ik) / len(xv)) * 100
-    print(f"non-outlier: {np.sum(is_out) / len(is_out) * 100:.2f}%")
+    ik = np.arange(len(xv))
 
-    yint, slope, res = linear_regression4(xv[ik], imax[ik], coh[ik] ** 2)
+    is_coda = np.abs(xv) > coda_start
+
+    if dvv_outlier_clip is not None:
+        is_outlier = np.abs(imax / xv) < (dvv_outlier_clip / 100)
+        ik = np.where((is_coda) & (is_outlier))[0]
+        print(f"non-outlier: {np.sum(is_outlier) / len(is_outlier) * 100:.2f}%")
+    else:
+        ik = np.where((is_coda))[0]
+
+    yint, slope, res = linear_regression_zforce(xv[ik], imax[ik], coh[ik] ** 2)
 
     print("tt_change: %.5f%% ss_res: %.4e " % (slope * 100, res))
 
