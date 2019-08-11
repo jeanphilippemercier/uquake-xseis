@@ -8,7 +8,7 @@ from Cython.Distutils import build_ext
 
 # os.environ["CXX"] = "g++-7"
 
-__version__ = "0.1.6"
+__version__ = "0.1.7"
 
 requirements = [
     'numpy'
