@@ -11,7 +11,8 @@ from xseis2 import xspy
 from xseis2 import xplot
 from spp.utils.application import Application
 from microquake.core.util import tools
-from microquake.core import read_events
+from obspy.core.stream import read
+from obspy.core.event import read_events
 
 plt.ion()
 

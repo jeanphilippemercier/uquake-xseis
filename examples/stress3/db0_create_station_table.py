@@ -9,12 +9,12 @@ from xseis2 import xio
 # import psycopg2
 # from psycopg2.extras import execute_values
 # from psycopg2.sql import SQL, Identifier
-from sqlalchemy import Table, Column, Integer, String, MetaData, ForeignKey, DateTime, Float, Sequence, ARRAY, LargeBinary
+from sqlalchemy import Table, Column, Integer, String, MetaData, DateTime, Float, ARRAY
 from sqlalchemy.sql import select
 from sqlalchemy import create_engine
 # import redis
 
-from spp.core.settings import settings
+from microquake.core.settings import settings
 
 from sqlalchemy.orm import sessionmaker
 

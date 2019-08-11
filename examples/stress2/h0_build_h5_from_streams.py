@@ -3,19 +3,16 @@ import matplotlib.pyplot as plt
 import numpy as np
 # import datetime
 # import struct
-from obspy.core import UTCDateTime
 import os
-import glob
 # import pickle
 from xseis2 import xutil
 # from xseis import xio
 import h5py
-import time
 
 # from obspy import read
 # from obspy.io.rg16.core import _read_rg16
 from microquake.core import read
-from spp.core.settings import settings
+from microquake.core.settings import settings
 from glob import glob
 from importlib import reload
 
