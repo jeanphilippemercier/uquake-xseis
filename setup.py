@@ -8,7 +8,7 @@ from Cython.Distutils import build_ext
 
 # os.environ["CXX"] = "g++-7"
 
-__version__ = "0.1.7"
+__version__ = "0.1.8"
 
 requirements = [
     'numpy'
@@ -40,19 +40,14 @@ ext_modules = cythonize([
 ])
 
 
-def main():
-    setup(
-        name='xseis2',
-        install_requires=requirements,
-        libraries=[libcnpy],
-        version=__version__,
-        cmdclass={
-            'build_clib': build_clib,
-            'build_ext': build_ext
-        },
-        packages=setuptools.find_packages(exclude=['tests']),
-        ext_modules=ext_modules)
-
-
-if __name__ == '__main__':
-    main()
+setup(
+    name='xseis2',
+    install_requires=requirements,
+    libraries=[libcnpy],
+    version=__version__,
+    cmdclass={
+        'build_clib': build_clib,
+        'build_ext': build_ext
+    },
+    packages=setuptools.find_packages(exclude=['tests']),
+    ext_modules=ext_modules)
