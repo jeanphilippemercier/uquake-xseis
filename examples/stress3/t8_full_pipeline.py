@@ -11,7 +11,9 @@ from xseis2 import xutil
 from xseis2 import xchange
 from xseis2 import xplot
 from xseis2 import xio
-from spp.core.settings import settings
+# from spp.core.settings import settings
+# from microquake.core.settings import settings
+
 from glob import glob
 
 from xseis2.h5stream import H5Stream
@@ -84,7 +86,6 @@ for sta in stas:
 # out = session.query(XCorr.time).group_by(XCorr.time).all()
 res = session.query(XCorr.time).distinct().all()
 times = np.sort([x[0] for x in res])
-
 
 
 # out = session.query(XCorr.dvv).filter(XCorr.time == times[1]).filter(XCorr.ckey.like(f"%{sta}%")).filter(XCorr.dvv.isnot(None)).all()

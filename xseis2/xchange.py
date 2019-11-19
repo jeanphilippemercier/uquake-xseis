@@ -13,24 +13,68 @@ from xseis2 import xutil
 from numpy.polynomial.polynomial import polyfit
 import matplotlib.pyplot as plt
 from datetime import timedelta
+from loguru import logger
 
 
-def ckey_dists(ckeys):
+def xcorr_ckeys_stack_slices(rawdat, sr, ckeys, cc_wlen_sec, keeplag_sec, stepsize_sec=None, whiten_freqs=None, onebit=True):
 
-    from spp.core.settings import settings
-    sites = [station.code for station in settings.inventory.stations()]
-    site_locs = [station.loc for station in settings.inventory.stations()]
-    ldict = dict(zip(sites, site_locs))
+    ncc = len(ckeys)
+    cclen = int(cc_wlen_sec * sr)
+    keeplag = int(keeplag_sec * sr)
+    stepsize = int(stepsize_sec * sr)
 
-    dists = dict()
-    for ck in ckeys:
-        c1, c2 = ck.split('_')
-        dd = xutil.dist(ldict[c1[:-2]], ldict[c2[:-2]])
-        dists[ck] = dd
-    return dists
+    padlen = int(cc_wlen_sec * sr * 2)
+    nfreq = int(padlen // 2 + 1)
+    whiten_freqs = np.array(whiten_freqs)
+
+    logger.info(f'ncc: {ncc}, cclen: {cc_wlen_sec}s, keeplag: {keeplag_sec}s, stepsize: {stepsize_sec} s')
+    # print(cclen, padlen, keeplag, stepsize)
+
+    nchan, nsamp = rawdat.shape
+    slices = xutil.build_slice_inds(0, nsamp, cclen, stepsize=stepsize)
+
+    whiten_win = None
+    if whiten_freqs is not None:
+        whiten_win = xutil.freq_window(whiten_freqs, padlen, sr)
+
+    logger.info(f'Computing {ncc} correlations for {len(slices)} slices')
+
+    fstack = np.zeros((ncc, nfreq), dtype=np.complex64)
+
+    for i, sl in enumerate(slices):
+        print(f"{i} / {len(slices)}")
+        dat = rawdat[:, sl[0]:sl[1]].copy()
+
+        if onebit is True:
+            dat = xutil.bandpass(dat, whiten_freqs[[0, -1]], sr)
+            dat = np.sign(dat)
+
+        fdat = np.fft.rfft(dat, axis=1, n=padlen)
+
+        if whiten_win is not None:
+            for irow in range(fdat.shape[0]):
+                fdat[irow] = whiten_win * xutil.phase(fdat[irow])
+        else:
+            for irow in range(fdat.shape[0]):
+                fdat[irow] /= np.sqrt(xutil.energy_freq(fdat[irow]))
+
+        for j, ckey in enumerate(ckeys):
+            k1, k2 = ckey
+            # stack[j] = np.fft.irfft(np.conj(fdat[k1]) * fdat[k2])
+            fstack[j] += np.conj(fdat[k1]) * fdat[k2]
+
+    keeplag = int(keeplag)
+    stack = np.zeros((ncc, keeplag * 2), dtype=np.float32)
+
+    for i in range(ncc):
+        cc = np.fft.irfft(fstack[i]) / len(slices)
+        stack[i, :keeplag] = cc[-keeplag:]
+        stack[i, keeplag:] = cc[:keeplag]
+
+    return stack
 
 
-def xcorr_stack_slices(datgen, chans, cclen, sr_raw, sr_dec, keeplag, whiten_freqs, onebit=True):
+def xcorr_stack_slices_gen(datgen, chans, cclen, sr_raw, sr_dec, keeplag, whiten_freqs, onebit=True):
 
     ckeys = xutil.unique_pairs(np.arange(len(chans)))
     ckeys = xutil.ckeys_remove_intersta(ckeys, chans)

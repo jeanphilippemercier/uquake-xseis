@@ -7,7 +7,7 @@ from scipy.signal import sosfilt, zpk2sos, iirfilter
 import os
 import glob
 import itertools
-
+import io
 # import pickle
 # import matplotlib.pyplot as plt
 # import matplotlib.gridspec as gridspec
@@ -15,6 +15,27 @@ import itertools
 # import h5py
 # import datetime
 # from scipy.signal import sosfilt, zpk2sos, iirfilter
+
+
+def index_ckeys_split(corr_keys, chan_names):
+    cdict = dict(zip(chan_names, np.arange(len(chan_names))))
+    ckeys_ix = []
+    for key in corr_keys:
+        k0, k1 = key.split('_')
+        ckeys_ix.append([cdict[k0], cdict[k1]])
+
+    ckeys_ix = np.array(ckeys_ix)
+    return ckeys_ix
+
+
+def array_to_bytes(dat):
+    output = io.BytesIO()
+    np.save(output, dat)
+    return output.getvalue()
+
+
+def bytes_to_array(buf):
+    return np.load(io.BytesIO(buf))
 
 
 def acausal(data):

@@ -10,3 +10,7 @@ def array_to_bytes(dat):
 
 def bytes_to_array(buf):
     return np.load(io.BytesIO(buf))
+
+
+def testf():
+    print("hello")
