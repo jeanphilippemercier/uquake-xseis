@@ -1,9 +1,7 @@
-import os
-from datetime import datetime, timedelta
+from datetime import timedelta
 import numpy as np
 import matplotlib.pyplot as plt
 import os
-import h5py
 from importlib import reload
 
 from xseis2 import xutil
@@ -12,13 +10,11 @@ from xseis2 import xplot
 from xseis2 import xio
 # from xseis2.xchange import smooth, nextpow2, getCoherence
 # from microquake.core import read
-# from microquake.core import UTCDateTime
-from spp.core.settings import settings
-from glob import glob
+# from obspy.core import UTCDateTime
 
 from microquake.io.h5stream import H5Stream
 
-from sqlalchemy import Table, Column, Integer, String, MetaData, ForeignKey, DateTime, Float, Sequence, ARRAY, LargeBinary
+from sqlalchemy import MetaData
 from sqlalchemy.sql import select
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker

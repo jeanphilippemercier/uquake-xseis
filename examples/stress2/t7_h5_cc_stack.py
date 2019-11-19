@@ -1,17 +1,10 @@
-import os
-from datetime import datetime, timedelta
+from datetime import timedelta
 
 import numpy as np
 
 import matplotlib.pyplot as plt
 import os
-import h5py
 from importlib import reload
-from scipy import fftpack
-from numpy.fft import fft, ifft, rfft, fftfreq
-
-from scipy import interpolate
-import scipy.signal
 
 from xseis2 import xutil
 from xseis2 import xchange
@@ -19,9 +12,6 @@ from xseis2 import xplot
 from xseis2 import xio
 # from xseis2.xchange import smooth, nextpow2, getCoherence
 # from microquake.core import read
-from microquake.core import UTCDateTime
-from spp.core.settings import settings
-from glob import glob
 
 from microquake.io.h5stream import H5Stream
 

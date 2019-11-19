@@ -1,29 +1,20 @@
-import os
-from datetime import datetime
-
 import numpy as np
 
 # from loguru import logger
-# from microquake.core import AttribDict, UTCDateTime
+# from obspy.core from obspy.core import UTCDateTime
 
 # from .processing_unit import ProcessingUnit
 
 import matplotlib.pyplot as plt
 import os
-import h5py
 from importlib import reload
-from scipy import fftpack
-from numpy.fft import fft, ifft, rfft, fftfreq
-
-from scipy import interpolate
-import scipy.signal
 
 from xseis2 import xutil
 from xseis2 import xchange
 from xseis2 import xplot
 # from xseis2.xchange import smooth, nextpow2, getCoherence
 from microquake.core import read
-from spp.core.settings import settings
+from microquake.core.settings import settings
 from glob import glob
 
 # path = "/home/phil/data/oyu/spp_common/salv_coda.h5"
