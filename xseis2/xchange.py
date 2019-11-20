@@ -6,14 +6,37 @@ import scipy.fftpack
 import scipy.optimize
 import scipy.signal
 from scipy.stats import scoreatpercentile
-from obspy.signal.invsim import cosine_taper
 from scipy.fftpack.helper import next_fast_len
-from obspy.signal.regression import linear_regression as obspy_linear_regression
 from xseis2 import xutil
 from numpy.polynomial.polynomial import polyfit
 import matplotlib.pyplot as plt
 from datetime import timedelta
 from loguru import logger
+
+
+def stream_decompose(st, wlen_sec=None, starttime=None):
+
+    if starttime is None:
+        starttime = np.min([tr.stats.starttime for tr in st])
+    sr = st[0].stats.sampling_rate
+    nchan = len(st)
+
+    if wlen_sec is not None:
+        npts_fix = int(wlen_sec * sr)
+    else:
+        npts_fix = int(np.max([len(tr.data) for tr in st]))
+
+    data = np.zeros((nchan, npts_fix), dtype=np.float32)
+    chan_names = []
+
+    for i, tr in enumerate(st):
+        i0 = int((tr.stats.starttime - starttime) * sr + 0.5)
+        sig = tr.data
+        slen = min(len(sig), npts_fix - i0)
+        data[i, i0: i0 + slen] = sig[:slen]
+        chan_names.append(f".{tr.stats.station}.{tr.stats.channel}")
+
+    return data, sr, starttime, np.array(chan_names)
 
 
 def xcorr_ckeys_stack_slices(rawdat, sr, ckeys, cc_wlen_sec, keeplag_sec, stepsize_sec=None, whiten_freqs=None, onebit=True):
@@ -37,12 +60,12 @@ def xcorr_ckeys_stack_slices(rawdat, sr, ckeys, cc_wlen_sec, keeplag_sec, stepsi
     if whiten_freqs is not None:
         whiten_win = xutil.freq_window(whiten_freqs, padlen, sr)
 
-    logger.info(f'Computing {ncc} correlations for {len(slices)} slices')
+    logger.info(f'Computing {ncc} xcorrs for {len(slices)} slices of {cc_wlen_sec}s each')
 
     fstack = np.zeros((ncc, nfreq), dtype=np.complex64)
 
     for i, sl in enumerate(slices):
-        print(f"{i} / {len(slices)}")
+        print(f"stacking slice {i} / {len(slices)}")
         dat = rawdat[:, sl[0]:sl[1]].copy()
 
         if onebit is True:
@@ -473,6 +496,9 @@ def apply_phase_shift(sig, nshift):
 
 def measure_phase_shift(sig1, sig2, sr, flims=None):
 
+    from obspy.signal.invsim import cosine_taper
+    from obspy.signal.regression import linear_regression as obspy_linear_regression
+
     wlen_samp = len(sig1)
     pad = int(2 ** (nextpow2(2 * wlen_samp)))
     taper = cosine_taper(wlen_samp, 0.85)
@@ -536,6 +562,10 @@ def mwcs_msnoise(current, reference, freqmin, freqmax, df, tmin, window_length, 
     :returns: [time_axis,delta_t,delta_err,delta_mcoh]. time_axis contains the  central times of the windows. The three other columns contain dt, error and
     mean coherence for each window.
     """
+
+    from obspy.signal.invsim import cosine_taper
+    from obspy.signal.regression import linear_regression as obspy_linear_regression
+
     delta_t = []
     delta_err = []
     delta_mcoh = []

@@ -624,140 +624,6 @@ def xcorr_ckeys(dat, ckeys, norm=True):
     return stack
 
 
-def xcorr_pair_stack_slices(sig1, sig2, cclen, stacklen, keeplag, stepsize=None, whiten_freqs=None, sr=None, onebit=False):
-
-    cclen = int(cclen)
-    keeplag = int(keeplag)
-    slices = build_slice_inds(0, len(sig1), cclen, stepsize=stepsize)
-    xvals = np.mean(slices, axis=1)
-
-    ncc = int(slices[-1][1] / stacklen)
-    padlen = cclen * 2
-    nfreq = int(padlen // 2 + 1)
-    # ccs = np.zeros((ncc, padlen), dtype=np.float32)
-    keeplen = int(keeplag * 2)
-    ccs = np.zeros((ncc, keeplen), dtype=np.float32)
-
-    win = None
-    if whiten_freqs is not None:
-        win = freq_window(whiten_freqs, padlen, sr)
-
-    step = slices[1][0] - slices[0][0]
-    assert(stacklen % step == 0)
-    chunksize = stacklen // step
-    print(step, chunksize)
-    print(ncc)
-
-    fcc = np.zeros(nfreq, dtype=np.complex64)
-    tmp_nstack = 0
-    cix = 0
-
-    for i, sl in enumerate(slices):
-        print(f"{i} / {len(slices)}")
-        win1 = sig1[sl[0]:sl[1]]
-        win2 = sig2[sl[0]:sl[1]]
-
-        if onebit is True:
-            win1 = np.sign(win1)
-            win2 = np.sign(win2)
-
-        f1 = np.fft.rfft(win1, n=padlen)
-        f2 = np.fft.rfft(win2, n=padlen)
-
-        if win is not None:
-            f1 = win * phase(f1)
-            f2 = win * phase(f2)
-
-        f1 /= np.sqrt(energy_freq(f1))
-        f2 /= np.sqrt(energy_freq(f2))
-        fcc += np.conj(f1) * f2
-        tmp_nstack += 1
-
-        if tmp_nstack >= chunksize:
-            cc = np.fft.irfft(fcc) / tmp_nstack
-            ccs[cix, :keeplag] = cc[-keeplag:]
-            ccs[cix, keeplag:] = cc[:keeplag]
-
-            fcc.fill(0)
-            tmp_nstack = 0
-            cix += 1
-
-    return xvals, ccs
-
-
-def xcorr_ckeys_stack_slices(rawdat, ckeys, cclen, keeplag, stepsize=None, whiten_freqs=None, sr=None, onebit=False):
-
-    cclen = int(cclen)
-
-    nchan, nsamp = rawdat.shape
-    slices = build_slice_inds(0, nsamp, cclen, stepsize=stepsize)
-    # xvals = np.mean(slices, axis=1)
-
-    # ncc = int(slices[-1][1] / stacklen)
-    ncc = len(ckeys)
-    padlen = cclen * 2
-    nfreq = int(padlen // 2 + 1)
-
-    whiten_win = None
-    if whiten_freqs is not None:
-        whiten_win = freq_window(whiten_freqs, padlen, sr)
-
-    fstack = np.zeros((ncc, nfreq), dtype=np.complex64)
-
-    for i, sl in enumerate(slices):
-        # print(f"{i} / {len(slices)}")
-        dat = rawdat[:, sl[0]:sl[1]].copy()
-
-        if onebit is True:
-            dat = bandpass(dat, whiten_freqs[[0, -1]], sr)
-            dat = np.sign(dat)
-
-        fdat = np.fft.rfft(dat, axis=1, n=padlen)
-
-        if whiten_win is not None:
-            for irow in range(fdat.shape[0]):
-                fdat[irow] = whiten_win * phase(fdat[irow])
-        else:
-            for irow in range(fdat.shape[0]):
-                fdat[irow] /= np.sqrt(energy_freq(fdat[irow]))
-
-        # dat0 = np.fft.irfft(fdat, axis=1)
-        # norm = xutil.energy_freq(fdat[0])
-
-        for j, ckey in enumerate(ckeys):
-            k1, k2 = ckey
-            # stack[j] = np.fft.irfft(np.conj(fdat[k1]) * fdat[k2])
-            fstack[j] += np.conj(fdat[k1]) * fdat[k2]
-
-    # stack = np.fft.irfft(fstack, axis=1)
-    # stack = np.roll(stack, padlen // 2, axis=1)
-    keeplag = int(keeplag)
-    stack = np.zeros((ncc, keeplag * 2), dtype=np.float32)
-
-    for i in range(ncc):
-        cc = np.fft.irfft(fstack[i]) / len(slices)
-        stack[i, :keeplag] = cc[-keeplag:]
-        stack[i, keeplag:] = cc[:keeplag]
-
-    return stack
-
-
-# def xcorr_freq(sig1f, sig2f):
-#   """Cross-correlate two signals."""
-
-#   ccf = np.conj(sig1f) * sig2f
-
-#   if phat:
-#       ccf = ccf / np.abs(ccf)
-
-#   cc = np.real(ifft(ccf))
-
-#   if norm:
-#       cc /= np.sqrt(energy(sig1) * energy(sig2))
-
-#   return np.roll(cc, len(cc) // 2)
-
-
 def energy(sig, axis=None):
     return np.sum(sig ** 2, axis=axis)
 
@@ -786,7 +652,7 @@ def build_slice_inds(start, stop, wlen, stepsize=None):
     return slices
 
 
-def freq_window(cf, npts, sr):
+def freq_window(cf, npts, sr, norm_energy=True):
     nfreq = int(npts // 2 + 1)
     fsr = npts / sr
     cf = np.array(cf, dtype=float)
@@ -798,6 +664,10 @@ def freq_window(cf, npts, sr):
     win[cx[1]:cx[2]] = 1
     win[cx[2]:cx[3]] = taper_cosine(cx[3] - cx[2])[::-1]
     win[cx[-1]:] = 0
+
+    if norm_energy is True:
+        win /= np.sqrt(energy_freq(win))
+
     return win
 
 
@@ -1076,3 +946,137 @@ def nans_interp(data, threshold=.05):
             data[nans] = np.interp(x(nans), x(~nans), data[~nans])
         else:
             data[:] = 0
+
+
+# def xcorr_pair_stack_slices(sig1, sig2, cclen, stacklen, keeplag, stepsize=None, whiten_freqs=None, sr=None, onebit=False):
+
+#     cclen = int(cclen)
+#     keeplag = int(keeplag)
+#     slices = build_slice_inds(0, len(sig1), cclen, stepsize=stepsize)
+#     xvals = np.mean(slices, axis=1)
+
+#     ncc = int(slices[-1][1] / stacklen)
+#     padlen = cclen * 2
+#     nfreq = int(padlen // 2 + 1)
+#     # ccs = np.zeros((ncc, padlen), dtype=np.float32)
+#     keeplen = int(keeplag * 2)
+#     ccs = np.zeros((ncc, keeplen), dtype=np.float32)
+
+#     win = None
+#     if whiten_freqs is not None:
+#         win = freq_window(whiten_freqs, padlen, sr)
+
+#     step = slices[1][0] - slices[0][0]
+#     assert(stacklen % step == 0)
+#     chunksize = stacklen // step
+#     print(step, chunksize)
+#     print(ncc)
+
+#     fcc = np.zeros(nfreq, dtype=np.complex64)
+#     tmp_nstack = 0
+#     cix = 0
+
+#     for i, sl in enumerate(slices):
+#         print(f"{i} / {len(slices)}")
+#         win1 = sig1[sl[0]:sl[1]]
+#         win2 = sig2[sl[0]:sl[1]]
+
+#         if onebit is True:
+#             win1 = np.sign(win1)
+#             win2 = np.sign(win2)
+
+#         f1 = np.fft.rfft(win1, n=padlen)
+#         f2 = np.fft.rfft(win2, n=padlen)
+
+#         if win is not None:
+#             f1 = win * phase(f1)
+#             f2 = win * phase(f2)
+
+#         f1 /= np.sqrt(energy_freq(f1))
+#         f2 /= np.sqrt(energy_freq(f2))
+#         fcc += np.conj(f1) * f2
+#         tmp_nstack += 1
+
+#         if tmp_nstack >= chunksize:
+#             cc = np.fft.irfft(fcc) / tmp_nstack
+#             ccs[cix, :keeplag] = cc[-keeplag:]
+#             ccs[cix, keeplag:] = cc[:keeplag]
+
+#             fcc.fill(0)
+#             tmp_nstack = 0
+#             cix += 1
+
+#     return xvals, ccs
+
+
+# def xcorr_ckeys_stack_slices(rawdat, ckeys, cclen, keeplag, stepsize=None, whiten_freqs=None, sr=None, onebit=False):
+
+#     cclen = int(cclen)
+
+#     nchan, nsamp = rawdat.shape
+#     slices = build_slice_inds(0, nsamp, cclen, stepsize=stepsize)
+#     # xvals = np.mean(slices, axis=1)
+
+#     # ncc = int(slices[-1][1] / stacklen)
+#     ncc = len(ckeys)
+#     padlen = cclen * 2
+#     nfreq = int(padlen // 2 + 1)
+
+#     whiten_win = None
+#     if whiten_freqs is not None:
+#         whiten_win = freq_window(whiten_freqs, padlen, sr)
+
+#     fstack = np.zeros((ncc, nfreq), dtype=np.complex64)
+
+#     for i, sl in enumerate(slices):
+#         # print(f"{i} / {len(slices)}")
+#         dat = rawdat[:, sl[0]:sl[1]].copy()
+
+#         if onebit is True:
+#             dat = bandpass(dat, whiten_freqs[[0, -1]], sr)
+#             dat = np.sign(dat)
+
+#         fdat = np.fft.rfft(dat, axis=1, n=padlen)
+
+#         if whiten_win is not None:
+#             for irow in range(fdat.shape[0]):
+#                 fdat[irow] = whiten_win * phase(fdat[irow])
+#         else:
+#             for irow in range(fdat.shape[0]):
+#                 fdat[irow] /= np.sqrt(energy_freq(fdat[irow]))
+
+#         # dat0 = np.fft.irfft(fdat, axis=1)
+#         # norm = xutil.energy_freq(fdat[0])
+
+#         for j, ckey in enumerate(ckeys):
+#             k1, k2 = ckey
+#             # stack[j] = np.fft.irfft(np.conj(fdat[k1]) * fdat[k2])
+#             fstack[j] += np.conj(fdat[k1]) * fdat[k2]
+
+#     # stack = np.fft.irfft(fstack, axis=1)
+#     # stack = np.roll(stack, padlen // 2, axis=1)
+#     keeplag = int(keeplag)
+#     stack = np.zeros((ncc, keeplag * 2), dtype=np.float32)
+
+#     for i in range(ncc):
+#         cc = np.fft.irfft(fstack[i]) / len(slices)
+#         stack[i, :keeplag] = cc[-keeplag:]
+#         stack[i, keeplag:] = cc[:keeplag]
+
+#     return stack
+
+
+# def xcorr_freq(sig1f, sig2f):
+#   """Cross-correlate two signals."""
+
+#   ccf = np.conj(sig1f) * sig2f
+
+#   if phat:
+#       ccf = ccf / np.abs(ccf)
+
+#   cc = np.real(ifft(ccf))
+
+#   if norm:
+#       cc /= np.sqrt(energy(sig1) * energy(sig2))
+
+#   return np.roll(cc, len(cc) // 2)

@@ -32,19 +32,16 @@ inv = read_csv(filename, site_code='', has_header=True)
 stations = inv.stations()
 stations = sorted(stations, key=lambda x: x.code)
 
-
 ################################
 logger.info('Connect to psql database')
 
 db_string = "postgres://postgres:postgres@localhost"
 db = create_engine(db_string)
 print(db.table_names())
-# Session = sessionmaker(bind=db)
-# session = Session()
-# session.close()
 session = sessionmaker(bind=db)()
 flow.sql_drop_tables(db)
 session.commit()
+# session.close()
 
 Base.metadata.create_all(db)
 session.commit()
@@ -67,7 +64,7 @@ keeplag_sec = 1.0
 stacklen_sec = 600.0
 onebit = True
 min_pair_dist = 100
-max_pair_dist = 800
+max_pair_dist = 9999
 
 ####################################
 
@@ -96,28 +93,37 @@ cpairs = session.query(ChanPair).filter(ChanPair.inter_dist < max_pair_dist).all
 
 valid_corr_keys = np.array([x[0] for x in session.query(ChanPair.corr_key).all()])
 
-# len(cpairs)
 
 # sta_ids = np.arange(130).astype(str)
 sta_ids = np.array([sta.code for sta in stations])[::5]
 stream = flow.get_continuous_fake(start_time, end_time, sta_ids, sr=dsr)
 stream.sort()
-data, sr, starttime = stream.as_array()
+
+reload(xchange)
+
+data, sr, starttime, chan_names = xchange.stream_decompose(stream)
+np.allclose(data[10], stream[10].data)
+data[30] = np.roll(data[10], 100)
+print(chan_names[30], chan_names[10])
 
 reload(xutil)
-chan_names = np.array([f".{tr.stats.station}.{tr.stats.channel}" for tr in stream])
 ckeys_all_str = [f"{k[0]}_{k[1]}"for k in xutil.unique_pairs(chan_names)]
 ckeys = sorted(list(set(valid_corr_keys) & set(ckeys_all_str)))
 ckeys_ix = xutil.index_ckeys_split(ckeys, chan_names)
 
+onebit = False
 dc = xchange.xcorr_ckeys_stack_slices(data, sr, ckeys_ix, cc_wlen_sec, keeplag_sec, stepsize_sec=stepsize_sec, whiten_freqs=whiten_freqs, onebit=onebit)
 
 flow.fill_table_xcorrs(dc, ckeys, starttime.datetime, session, rhandle)
 
-dists = flow.ckey_dists(ckeys, stations)
 # plt.hist(dists.values(), bins=100)
 ############################################
-xplot.im(dc)
+xplot.im(dc, norm=False)
+
+mx = np.max(dc, axis=1)
+imax = np.argmax(mx)
+print(ckeys[imax], mx[imax])
+plt.plot(mx)
 
 # stations = sorted(stations, key=lambda x: x.code)
 # [sta.code for sta in stations]
