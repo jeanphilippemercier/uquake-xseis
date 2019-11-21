@@ -13,6 +13,69 @@ import matplotlib.pyplot as plt
 from datetime import timedelta
 from loguru import logger
 from numba import njit
+import matplotlib.pyplot as plt
+
+
+def dvv(cc1, cc2, sr, wlen_sec, cfreqs, coda_start_sec, coda_end_sec, interp_factor=100, dvv_outlier_clip=None, plot=False):
+
+    assert(len(cc1) == len(cc2))
+
+    wlen = int(wlen_sec * sr)
+    coda_start = int(coda_start_sec * sr)
+    coda_end = int(coda_end_sec * sr)
+
+    hl = len(cc1) // 2
+    iwin = [hl - coda_end, hl + coda_end]
+
+    stepsize = wlen // 4
+    slices = xutil.build_slice_inds(iwin[0], iwin[1], wlen, stepsize=stepsize)
+    print("num slices", len(slices))
+
+    # %timeit fwins1, filt = xchange.windowed_fft(sig1, slices, sr, cfreqs)
+    fwins1, filt = windowed_fft(cc1, slices, sr, cfreqs)
+    fwins2, filt = windowed_fft(cc2, slices, sr, cfreqs)
+    imax, coh = measure_shift_fwins_cc(fwins1, fwins2, interp_factor=interp_factor).T
+
+    print("mean coh %.3f" % np.mean(coh))
+
+    xv = np.mean(slices, axis=1) - hl
+
+    ik = np.arange(len(xv))
+
+    is_coda = np.abs(xv) > coda_start
+
+    if dvv_outlier_clip is not None:
+        is_outlier = np.abs(imax / xv) < (dvv_outlier_clip / 100)
+        ik = np.where((is_coda) & (is_outlier))[0]
+        print(f"non-outlier: {np.sum(is_outlier) / len(is_outlier) * 100:.2f}%")
+    else:
+        ik = np.where((is_coda))[0]
+
+    yint, slope, res = linear_regression_zforce(xv[ik], imax[ik], coh[ik] ** 2)
+    dvv_percentage = slope * 100
+
+    print("tt_change: %.5f%% ss_res: %.4e " % (dvv_percentage, res))
+
+    if plot is True:
+        tfit = yint + slope * xv
+        plt.scatter(xv[ik], imax[ik], c=coh[ik])
+        plt.colorbar()
+        mask = np.ones_like(xv, bool)
+        mask[ik] = False
+        plt.scatter(xv[mask], imax[mask], c='red', alpha=0.2)
+        # plt.scatter(xv[ik], imax[ik], c='red', alpha=0.5)
+        plt.plot(xv, tfit)
+        # plt.plot(xv, tfit)
+        plt.title("tt_change: %.3f%% ss_res: %.3f " % (slope * 100, res))
+        plt.axvline(0, linestyle='--')
+        alpha = 0.5
+        # vel = 3200.
+        # direct = dist / vel * sr
+        plt.axvline(coda_start, linestyle='--', color='green', alpha=alpha)
+        plt.axvline(-coda_start, linestyle='--', color='green', alpha=alpha)
+
+    return dvv_percentage, res[0]
+
 
 
 def stream_decompose(st, wlen_sec=None, starttime=None):
@@ -359,66 +422,6 @@ def linear_regression_yzero(xv, yv, weights):
     slope, yint = c
     # residual = stats[0][0]
     return yint, slope, residual
-
-
-def dvv(cc1, cc2, sr, wlen_sec, cfreqs, coda_start_sec, coda_end_sec, interp_factor=100, dvv_outlier_clip=None):
-
-    assert(len(cc1) == len(cc2))
-
-    wlen = int(wlen_sec * sr)
-    coda_start = int(coda_start_sec * sr)
-    coda_end = int(coda_end_sec * sr)
-
-    hl = len(cc1) // 2
-    iwin = [hl - coda_end, hl + coda_end]
-
-    stepsize = wlen // 4
-    slices = xutil.build_slice_inds(iwin[0], iwin[1], wlen, stepsize=stepsize)
-    print("num slices", len(slices))
-
-    # %timeit fwins1, filt = xchange.windowed_fft(sig1, slices, sr, cfreqs)
-    fwins1, filt = windowed_fft(cc1, slices, sr, cfreqs)
-    fwins2, filt = windowed_fft(cc2, slices, sr, cfreqs)
-    imax, coh = measure_shift_fwins_cc(fwins1, fwins2, interp_factor=interp_factor).T
-
-    print("mean coh %.3f" % np.mean(coh))
-
-    xv = np.mean(slices, axis=1) - hl
-
-    ik = np.arange(len(xv))
-
-    is_coda = np.abs(xv) > coda_start
-
-    if dvv_outlier_clip is not None:
-        is_outlier = np.abs(imax / xv) < (dvv_outlier_clip / 100)
-        ik = np.where((is_coda) & (is_outlier))[0]
-        print(f"non-outlier: {np.sum(is_outlier) / len(is_outlier) * 100:.2f}%")
-    else:
-        ik = np.where((is_coda))[0]
-
-    yint, slope, res = linear_regression_zforce(xv[ik], imax[ik], coh[ik] ** 2)
-    dvv_percentage = slope * 100
-
-    print("tt_change: %.5f%% ss_res: %.4e " % (dvv_percentage, res))
-
-    # tfit = yint + slope * xv
-    # plt.scatter(xv[ik], imax[ik], c=coh[ik])
-    # plt.colorbar()
-    # mask = np.ones_like(xv, bool)
-    # mask[ik] = False
-    # plt.scatter(xv[mask], imax[mask], c='red', alpha=0.2)
-    # # plt.scatter(xv[ik], imax[ik], c='red', alpha=0.5)
-    # plt.plot(xv, tfit)
-    # # plt.plot(xv, tfit)
-    # plt.title("tt_change: %.3f%% ss_res: %.3f " % (slope * 100, res))
-    # plt.axvline(0, linestyle='--')
-    # alpha = 0.5
-    # # vel = 3200.
-    # # direct = dist / vel * sr
-    # plt.axvline(coda_start, linestyle='--', color='green', alpha=alpha)
-    # plt.axvline(-coda_start, linestyle='--', color='green', alpha=alpha)
-
-    return dvv_percentage, res[0]
 
 
 def windowed_fft(sig, slices, sr, corner_freqs, taper_percent=0.2):

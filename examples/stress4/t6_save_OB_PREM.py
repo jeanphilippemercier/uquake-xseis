@@ -26,6 +26,12 @@ api_base_url = settings.get('api_base_url')
 inventory = settings.inventory
 network_code = settings.NETWORK_CODE
 
+# import pickle
+# fname = os.path.join(os.environ['SPP_COMMON'], "stations.pickle")
+# with open(fname, 'wb') as output:  # Overwrites any existing file.
+#     pickle.dump(stations, output, pickle.HIGHEST_PROTOCOL)
+
+
 #############################
 
 sr_raw = 6000.0
@@ -62,9 +68,10 @@ while True:
     for i, tr in enumerate(stream):
         print(tr)
         # sr = tr.stats.sampling_rate
+        tr.detrend('demean')
+        tr.detrend('linear')
         tr.filter('bandpass', freqmin=fband[0], freqmax=fband[1])
         sig = np.sign(tr.data[::decf])
-        # sig = tr.data[::decf]
         i0 = int((tr.stats.starttime - req_start_time) * dsr + 0.5)
         slen = min(len(sig), nsamp - i0)
         data[i, i0: i0 + slen] = sig[:slen]
@@ -79,3 +86,9 @@ while True:
     np.savez_compressed(fname, start_time=tstring, data=data, sr=dsr, chans=chan_names)
 
 ###################################################################
+
+
+# fname = os.path.join(os.environ['SPP_COMMON'], "cont10min.mseed")
+# stream[::10].write(fname)
+
+

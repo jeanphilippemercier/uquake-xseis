@@ -1,10 +1,9 @@
 from importlib import reload
 import os
 import numpy as np
-import os
 import time
 # import h5py
-# from glob import glob
+from glob import glob
 from datetime import datetime, timedelta
 
 import redis
@@ -33,9 +32,7 @@ plt.ion()
 # stations = inv.stations()
 # stations = sorted(stations, key=lambda x: x.code)
 
-filename = os.path.join(os.environ['SPP_COMMON'], "stations.pickle")
-
-with open(filename, 'rb') as f:
+with open(os.path.join(os.environ['SPP_COMMON'], "stations.pickle"), 'rb') as f:
     stations = pickle.load(f)
 
 
@@ -69,20 +66,11 @@ stepsize_sec = cc_wlen_sec
 # stepsize_sec = cc_wlen_sec / 2
 keeplag_sec = 1.0
 stacklen_sec = 100.0
-onebit = True
+onebit = False
 min_pair_dist = 100
 max_pair_dist = 1000
 
 ####################################
-
-curtime = datetime.utcnow()
-times = [curtime + timedelta(seconds=i * stacklen_sec) for i in range(5)]
-start_time = times[0]
-end_time = start_time + timedelta(seconds=stacklen_sec)
-
-# for t0 in times:
-# print(t0)
-# t1 = t0 + timedelta(seconds=stacklen_sec)
 
 ###############################
 
@@ -92,6 +80,50 @@ flow.fill_table_chanpairs(stations, session, min_pair_dist, max_pair_dist)
 db_corr_keys = np.array([x[0] for x in session.query(ChanPair.corr_key).all()])
 
 logger.info(f'{len(db_corr_keys)} potential corr keys')
+
+###############################
+
+data_src = os.path.join(os.environ['SPP_COMMON'], "data_dump")
+# data_src = params['data_connector']['data_source']['location']
+data_fles = np.sort(glob(os.path.join(data_src, '*.npz')))
+
+fname = data_fles[0]
+
+# fh = np.load(fname, start_time=tstring, data=data, sr=dsr, chans=chan_names)
+fh = np.load(fname)
+data = fh['data'].astype(np.float32)
+plt.plot(data[2])
+
+# for fle in MSEEDS[:3]:
+#     fsizemb = os.path.getsize(fle) / 1024.**2
+#     print("%s | %.2f mb" % (os.path.basename(fle), fsizemb))
+#     if (fsizemb < 3 or fsizemb > 15):
+#         print("skipping file")
+#         continue
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 # sta_ids = np.arange(130).astype(str)
 sta_ids = np.array([sta.code for sta in stations])[::10]

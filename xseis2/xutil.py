@@ -336,6 +336,10 @@ def shift_locs_ot(locs, unshift=False, vals=np.array([650000., 4766000., 0]), zd
 #       return locs - vals
 
 
+def pearson_coeff(sig1, sig2):
+    return np.dot(sig1, sig2) / np.sqrt(energy(sig1) * energy(sig2))
+
+
 def normVec(v):
     return v / norm(v)
 
