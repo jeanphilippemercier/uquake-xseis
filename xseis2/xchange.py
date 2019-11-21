@@ -5,20 +5,46 @@ import logging
 import scipy.fftpack
 import scipy.optimize
 import scipy.signal
-from scipy.stats import scoreatpercentile
-from scipy.fftpack.helper import next_fast_len
+# from scipy.stats import scoreatpercentile
+# from scipy.fftpack.helper import next_fast_len
 from xseis2 import xutil
 from numpy.polynomial.polynomial import polyfit
 import matplotlib.pyplot as plt
 from datetime import timedelta
 from loguru import logger
 from numba import njit
-import matplotlib.pyplot as plt
 
 
-def dvv(cc1, cc2, sr, wlen_sec, cfreqs, coda_start_sec, coda_end_sec, interp_factor=100, dvv_outlier_clip=None, plot=False):
+def mock_corrs_dvv(nsamp, sr, tt_change_percent, fband_sig, fband_noise, noise_scale):
+
+    sig1 = xutil.noise1d(nsamp, fband_sig, sr, scale=1, taplen=0)
+    sig2 = stretch(sig1, sr, tt_change_percent)
+
+    sig1 = np.concatenate((sig1[::-1][1:], sig1))
+    sig2 = np.concatenate((sig2[::-1][1:], sig2))
+    nsamp = len(sig1)
+    noise1 = xutil.noise1d(nsamp, fband_noise, sr, scale=noise_scale, taplen=0)
+    noise2 = xutil.noise1d(nsamp, fband_noise, sr, scale=noise_scale, taplen=0)
+    sig1 += noise1
+    sig2 += noise2
+    return sig1, sig2
+
+
+def linear_regression_zforce(xv, yv, weights):
+    out = np.linalg.lstsq(xv[:, None] * weights[:, None], yv * weights, rcond=None)
+    # print(out)
+    slope = out[0][0]
+    yint = 0
+    residual = out[1][0]
+
+    return yint, slope, residual
+
+
+def dvv(cc1, cc2, sr, wlen_sec, cfreqs, coda_start_sec, coda_end_sec, interp_factor=100, dvv_outlier_clip=None):
 
     assert(len(cc1) == len(cc2))
+
+    coeff = xutil.pearson_coeff(cc1, cc2)
 
     wlen = int(wlen_sec * sr)
     coda_start = int(coda_start_sec * sr)
@@ -29,53 +55,75 @@ def dvv(cc1, cc2, sr, wlen_sec, cfreqs, coda_start_sec, coda_end_sec, interp_fac
 
     stepsize = wlen // 4
     slices = xutil.build_slice_inds(iwin[0], iwin[1], wlen, stepsize=stepsize)
-    print("num slices", len(slices))
 
-    # %timeit fwins1, filt = xchange.windowed_fft(sig1, slices, sr, cfreqs)
     fwins1, filt = windowed_fft(cc1, slices, sr, cfreqs)
     fwins2, filt = windowed_fft(cc2, slices, sr, cfreqs)
     imax, coh = measure_shift_fwins_cc(fwins1, fwins2, interp_factor=interp_factor).T
 
-    print("mean coh %.3f" % np.mean(coh))
-
     xv = np.mean(slices, axis=1) - hl
-
-    ik = np.arange(len(xv))
+    ikeep = np.arange(len(xv))
 
     is_coda = np.abs(xv) > coda_start
+    n_outlier = None
 
     if dvv_outlier_clip is not None:
         is_outlier = np.abs(imax / xv) < (dvv_outlier_clip / 100)
-        ik = np.where((is_coda) & (is_outlier))[0]
-        print(f"non-outlier: {np.sum(is_outlier) / len(is_outlier) * 100:.2f}%")
+        ikeep = np.where((is_coda) & (is_outlier))[0]
+        n_outlier = int(100 * (1 - (np.sum(is_outlier) / len(is_outlier))))
+        # print(f"non-outlier: {np.sum(is_outlier) / len(is_outlier) * 100:.2f}%")
     else:
-        ik = np.where((is_coda))[0]
+        ikeep = np.where((is_coda))[0]
 
-    yint, slope, res = linear_regression_zforce(xv[ik], imax[ik], coh[ik] ** 2)
-    dvv_percentage = slope * 100
+    # yint, slope, res = linear_regression_zforce(xv[ikeep], imax[ikeep], coh[ikeep] ** 2)
+    regress = linear_regression_zforce(xv[ikeep], imax[ikeep], coh[ikeep] ** 2)
+    yint, slope, res = regress
+    dvv_percentage = -slope * 100
+    # print(coeff)
+    # print(res)
+    # print("tt_change: %.5f%% ss_res: %.4e " % (dvv_percentage, res))
+    print(f"[dvv: {dvv_percentage:.4f}%] [corr_coeff: {coeff:.2f}] [outliers: {n_outlier}%] [res_fit: {res:.4f}]")
 
-    print("tt_change: %.5f%% ss_res: %.4e " % (dvv_percentage, res))
+    out = {"dvv": dvv_percentage, "regress": regress, "xvals": xv, "imax": imax, "coh": coh, "coda_win": [coda_start, coda_end], "ikeep": ikeep, "coeff": coeff, "n_outlier": n_outlier}
 
-    if plot is True:
-        tfit = yint + slope * xv
-        plt.scatter(xv[ik], imax[ik], c=coh[ik])
-        plt.colorbar()
-        mask = np.ones_like(xv, bool)
-        mask[ik] = False
-        plt.scatter(xv[mask], imax[mask], c='red', alpha=0.2)
-        # plt.scatter(xv[ik], imax[ik], c='red', alpha=0.5)
-        plt.plot(xv, tfit)
-        # plt.plot(xv, tfit)
-        plt.title("tt_change: %.3f%% ss_res: %.3f " % (slope * 100, res))
-        plt.axvline(0, linestyle='--')
-        alpha = 0.5
-        # vel = 3200.
-        # direct = dist / vel * sr
-        plt.axvline(coda_start, linestyle='--', color='green', alpha=alpha)
-        plt.axvline(-coda_start, linestyle='--', color='green', alpha=alpha)
+    return out
 
-    return dvv_percentage, res[0]
 
+def plot_dvv(vals, dvv_true=None):
+    import matplotlib.pyplot as plt
+
+    yint, slope, res = vals['regress']
+    xv = vals['xvals']
+    coh = vals['coh']
+    imax = vals['imax']
+    ikeep = vals['ikeep']
+    coeff = vals['coeff']
+    n_outlier = vals['n_outlier']
+    coda_start, coda_end = vals['coda_win']
+    dvv_meas = vals['dvv']
+
+    tfit = yint + slope * xv
+    plt.plot(xv, tfit, label=f'dvv_meas: {dvv_meas:.3f}')
+
+    if dvv_true is not None:
+        tfit2 = yint + (dvv_true / 100) * xv
+        plt.plot(xv, tfit2, label=f'dvv_true: {dvv_true:.3f}', color='green', linestyle='--')
+
+    plt.scatter(xv[ikeep], imax[ikeep], c=coh[ikeep])
+    plt.colorbar()
+    mask = np.ones_like(xv, bool)
+    mask[ikeep] = False
+    plt.scatter(xv[mask], imax[mask], c='red', alpha=0.2, label='ignored')
+
+    title = f"[dvv: {dvv_meas:.4f}%] [corr_coeff: {coeff:.2f}] [outliers: {n_outlier}%] [res_fit: {res:.4f}]"
+
+    plt.title(title)
+    plt.axvline(0, linestyle='--')
+    alpha = 0.5
+    # vel = 3200.
+    # direct = dist / vel * sr
+    plt.axvline(coda_start, linestyle='--', color='red', alpha=alpha)
+    plt.axvline(-coda_start, linestyle='--', color='red', alpha=alpha)
+    plt.legend()
 
 
 def stream_decompose(st, wlen_sec=None, starttime=None):
@@ -394,16 +442,6 @@ def linear_regression3(xv, yv, weights):
     c = out[0]
     residual = out[1] / len(xv)
     slope, yint = c
-
-    return yint, slope, residual
-
-
-def linear_regression_zforce(xv, yv, weights):
-    out = np.linalg.lstsq(xv[:, None] * weights[:, None], yv * weights, rcond=None)
-    # print(out)
-    slope = out[0][0]
-    yint = 0
-    residual = out[1] / len(xv)
 
     return yint, slope, residual
 

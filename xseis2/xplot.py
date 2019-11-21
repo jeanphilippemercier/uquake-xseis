@@ -9,12 +9,25 @@ import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 import numpy as np
 import os
+import datetime
 from scipy import fftpack
 from scipy.fftpack import fft, ifft, rfft, fftfreq
 from xseis2 import xutil
 
 from matplotlib.pyplot import rcParams
 rcParams['figure.figsize'] = 11, 8
+
+
+def quicksave(fig=None, savedir=None, prefix='py', dpi=100):
+	if fig is None:
+		fig = plt.gcf()
+	if savedir is None:
+		savedir = os.path.join(os.environ['HOME'], "Pictures")
+	tstamp = datetime.datetime.now().strftime('%Y-%m-%d_%H%M%S')
+	fname = f"{prefix}_{tstamp}.png"
+	fpath = os.path.join(savedir, fname)
+
+	fig.savefig(fpath, dpi=dpi)
 
 
 def moveout(dat, dists, sr=1, scale=20, picks=None):

@@ -88,7 +88,13 @@ while True:
 ###################################################################
 
 
-# fname = os.path.join(os.environ['SPP_COMMON'], "cont10min.mseed")
-# stream[::10].write(fname)
+from microquake.core import read
+
+fname = os.path.join(os.environ['SPP_COMMON'], "cont10min.mseed")
+stream = read(fname)
+st2 = stream[::8]
+
+fname = os.path.join(os.environ['SPP_COMMON'], "cont10min_small.mseed")
+st2.write(fname)
 
 
