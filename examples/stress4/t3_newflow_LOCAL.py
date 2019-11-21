@@ -102,8 +102,9 @@ stream.sort()
 reload(xchange)
 
 data, sr, starttime, chan_names = xchange.stream_decompose(stream)
-np.allclose(data[10], stream[10].data)
-data[30] = np.roll(data[10], 100)
+# np.allclose(data[10], stream[10].data)
+# data[30] = np.roll(data[10], 100)
+data[[30, 10], :100000] = 0
 print(chan_names[30], chan_names[10])
 
 reload(xutil)
@@ -111,22 +112,57 @@ ckeys_all_str = [f"{k[0]}_{k[1]}"for k in xutil.unique_pairs(chan_names)]
 ckeys = sorted(list(set(valid_corr_keys) & set(ckeys_all_str)))
 ckeys_ix = xutil.index_ckeys_split(ckeys, chan_names)
 
-onebit = False
 dc = xchange.xcorr_ckeys_stack_slices(data, sr, ckeys_ix, cc_wlen_sec, keeplag_sec, stepsize_sec=stepsize_sec, whiten_freqs=whiten_freqs, onebit=onebit)
 
-flow.fill_table_xcorrs(dc, ckeys, starttime.datetime, session, rhandle)
 
 # plt.hist(dists.values(), bins=100)
 ############################################
 xplot.im(dc, norm=False)
+# xplot.im(dc, norm=False)
 
 mx = np.max(dc, axis=1)
 imax = np.argmax(mx)
 print(ckeys[imax], mx[imax])
 plt.plot(mx)
 
+session.query(XCorr).delete()
+flow.fill_table_xcorrs(dc, ckeys, starttime.datetime, session, rhandle)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 # stations = sorted(stations, key=lambda x: x.code)
 # [sta.code for sta in stations]
 # import itertools
 # list(itertools.product(['x', 'y'], ['X', 'Y', 'Z']))
 
+
+# data, sr, starttime, chan_names = xchange.stream_decompose(stream)
+# cclen = int(cc_wlen_sec * sr)
+# nsamp = data.shape[1]
+# slices = xutil.build_slice_inds(0, nsamp, cclen)
+# sl = slices[0]
+# dat = data[:, sl[0]:sl[1]].copy()
+# dat[[0, 20]] = 0
+
+# random_amp = 1e-9
+# ix_bad = np.where(np.sum(np.abs(dat), axis=1) == 0)[0]
+# dat[ix_bad[0]] = np.random.uniform(-random_amp, random_amp, dat.shape[1])
+# dat[ix_bad[1]] = np.random.uniform(-random_amp, random_amp, dat.shape[1])
+
+# xplot.im(dat, norm=False)
+# xplot.im(dat, norm=True)
+
+# plt.plot(dat[0])

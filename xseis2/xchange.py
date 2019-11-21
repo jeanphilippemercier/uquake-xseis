@@ -12,6 +12,7 @@ from numpy.polynomial.polynomial import polyfit
 import matplotlib.pyplot as plt
 from datetime import timedelta
 from loguru import logger
+from numba import njit
 
 
 def stream_decompose(st, wlen_sec=None, starttime=None):
@@ -39,7 +40,74 @@ def stream_decompose(st, wlen_sec=None, starttime=None):
     return data, sr, starttime, np.array(chan_names)
 
 
-def xcorr_ckeys_stack_slices(rawdat, sr, ckeys, cc_wlen_sec, keeplag_sec, stepsize_sec=None, whiten_freqs=None, onebit=True):
+def xcorr_ckeys_stack_slices(rawdat, sr, ckeys, cc_wlen_sec, keeplag_sec, stepsize_sec=None, whiten_freqs=None, onebit=True, random_amp=1e-12):
+
+    ncc = len(ckeys)
+    cclen = int(cc_wlen_sec * sr)
+    keeplag = int(keeplag_sec * sr)
+    stepsize = int(stepsize_sec * sr)
+
+    padlen = int(cc_wlen_sec * sr * 2)
+    nfreq = int(padlen // 2 + 1)
+    whiten_freqs = np.array(whiten_freqs)
+
+    logger.info(f'ncc: {ncc}, cclen: {cc_wlen_sec}s, keeplag: {keeplag_sec}s, stepsize: {stepsize_sec} s')
+    # print(cclen, padlen, keeplag, stepsize)
+
+    nchan, nsamp = rawdat.shape
+    slices = xutil.build_slice_inds(0, nsamp, cclen, stepsize=stepsize)
+
+    whiten_win = None
+    if whiten_freqs is not None:
+        whiten_win = xutil.freq_window(whiten_freqs, padlen, sr)
+
+    logger.info(f'Computing {ncc} xcorrs for {len(slices)} slices of {cc_wlen_sec}s each')
+
+    fstack = np.zeros((ncc, nfreq), dtype=np.complex64)
+    fdat = np.zeros((nchan, nfreq), dtype=np.complex64)
+
+    for i, sl in enumerate(slices):
+        print(f"stacking slice {i} / {len(slices)}")
+
+        for isig in range(nchan):
+            sig = rawdat[isig, sl[0]:sl[1]].copy()
+
+            if np.sum(np.abs(sig)) == 0:
+                print(f"sig {isig} all zeros ")
+                sig[:] = np.random.uniform(-random_amp, random_amp, len(sig))
+
+            if onebit is True:
+                sig[:] = np.sign(xutil.bandpass(sig, whiten_freqs[[0, -1]], sr))
+            fsig = np.fft.rfft(sig, n=padlen)
+
+            if whiten_win is not None:
+                fsig = whiten_win * xutil.phase(fsig)
+            else:
+                fsig /= np.sqrt(xutil.energy_freq(fsig))
+            fdat[isig] = fsig
+
+        xcorr_stack_freq(fdat, ckeys, fstack)
+
+        # for j, ckey in enumerate(ckeys):
+        #     fstack[j] += np.conj(fdat[k1]) * fdat[k2]
+
+        # for j, ckey in enumerate(ckeys):
+        #     k1, k2 = ckey
+        #     # stack[j] = np.fft.irfft(np.conj(fdat[k1]) * fdat[k2])
+        #     fstack[j] += np.conj(fdat[k1]) * fdat[k2]
+
+    keeplag = int(keeplag)
+    stack = np.zeros((ncc, keeplag * 2), dtype=np.float32)
+
+    for i in range(ncc):
+        cc = np.fft.irfft(fstack[i]) / len(slices)
+        stack[i, :keeplag] = cc[-keeplag:]
+        stack[i, keeplag:] = cc[:keeplag]
+
+    return stack
+
+
+def xcorr_ckeys_stack_slices2(rawdat, sr, ckeys, cc_wlen_sec, keeplag_sec, stepsize_sec=None, whiten_freqs=None, onebit=True, random_amp=1e-9):
 
     ncc = len(ckeys)
     cclen = int(cc_wlen_sec * sr)
@@ -81,10 +149,7 @@ def xcorr_ckeys_stack_slices(rawdat, sr, ckeys, cc_wlen_sec, keeplag_sec, stepsi
             for irow in range(fdat.shape[0]):
                 fdat[irow] /= np.sqrt(xutil.energy_freq(fdat[irow]))
 
-        for j, ckey in enumerate(ckeys):
-            k1, k2 = ckey
-            # stack[j] = np.fft.irfft(np.conj(fdat[k1]) * fdat[k2])
-            fstack[j] += np.conj(fdat[k1]) * fdat[k2]
+        xcorr_stack_freq(fdat, ckeys, fstack)
 
     keeplag = int(keeplag)
     stack = np.zeros((ncc, keeplag * 2), dtype=np.float32)
@@ -95,6 +160,14 @@ def xcorr_ckeys_stack_slices(rawdat, sr, ckeys, cc_wlen_sec, keeplag_sec, stepsi
         stack[i, keeplag:] = cc[:keeplag]
 
     return stack
+
+
+@njit
+def xcorr_stack_freq(sigs_freq, cc_keys, cc_stack_freq):
+
+    for i in range(len(cc_keys)):
+        k1, k2 = cc_keys[i]
+        cc_stack_freq[i] += sigs_freq[k1] * sigs_freq[k2]
 
 
 def xcorr_stack_slices_gen(datgen, chans, cclen, sr_raw, sr_dec, keeplag, whiten_freqs, onebit=True):
@@ -324,8 +397,9 @@ def dvv(cc1, cc2, sr, wlen_sec, cfreqs, coda_start_sec, coda_end_sec, interp_fac
         ik = np.where((is_coda))[0]
 
     yint, slope, res = linear_regression_zforce(xv[ik], imax[ik], coh[ik] ** 2)
+    dvv_percentage = slope * 100
 
-    print("tt_change: %.5f%% ss_res: %.4e " % (slope * 100, res))
+    print("tt_change: %.5f%% ss_res: %.4e " % (dvv_percentage, res))
 
     # tfit = yint + slope * xv
     # plt.scatter(xv[ik], imax[ik], c=coh[ik])
@@ -344,7 +418,7 @@ def dvv(cc1, cc2, sr, wlen_sec, cfreqs, coda_start_sec, coda_end_sec, interp_fac
     # plt.axvline(coda_start, linestyle='--', color='green', alpha=alpha)
     # plt.axvline(-coda_start, linestyle='--', color='green', alpha=alpha)
 
-    return slope * 100, res[0]
+    return dvv_percentage, res[0]
 
 
 def windowed_fft(sig, slices, sr, corner_freqs, taper_percent=0.2):
