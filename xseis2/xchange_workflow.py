@@ -2,18 +2,52 @@ import os
 from datetime import datetime, timedelta
 import numpy as np
 import itertools
-from sqlalchemy import Table, Column, Integer, String, MetaData, ForeignKey, DateTime, Float, Sequence, ARRAY, LargeBinary, Boolean
-from sqlalchemy.sql import select
+# from sqlalchemy import Table, Column, Integer, String, MetaData, ForeignKey, DateTime, Float, Sequence, ARRAY, LargeBinary, Boolean
+# from sqlalchemy.sql import select
 # from sqlalchemy import create_engine
 # from sqlalchemy.orm import sessionmaker
-from sqlalchemy.ext.declarative import declarative_base
+# from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy import MetaData
 from xseis2 import xutil
 from xseis2 import xchange
 # from xseis2 import xio
-from xseis2.xsql import VelChange, XCorr, ChanPair, Base
+
+from xseis2.xsql import Station, StationPair, VelChange, XCorr, ChanPair
 
 from loguru import logger
+
+
+def fill_table_stations(stations, session, clear=True):
+
+    if clear:
+        session.query(Station).delete()
+
+    rows = []
+    for i, sta in enumerate(stations):
+        chans = sorted([c.code for c in sta.channels])
+        db_station = Station(code=sta.code, channels=chans, location=sta.loc)
+        rows.append(db_station)
+
+    session.add_all(rows)
+    session.commit()
+
+
+def fill_table_station_pairs(stations, session, clear=True):
+
+    if clear:
+        session.query(StationPair).delete()
+
+    stations_sorted = sorted(stations, key=lambda x: x.code)
+
+    rows = []
+    for sta1, sta2 in itertools.combinations(stations_sorted, 2):
+        inter_dist = xutil.dist(sta1.location, sta2.location)
+        code = f"{sta1.code}_{sta2.code}"
+        pair = StationPair(code=code, dist=inter_dist)
+        rows.append(pair)
+
+    session.add_all(rows)
+    session.commit()
 
 
 def fill_table_xcorrs(dc, ckeys, starttime, session, rhandle):
@@ -35,6 +69,11 @@ def fill_table_xcorrs(dc, ckeys, starttime, session, rhandle):
     pipe.execute()  # add data to redis
     session.add_all(rows)  # add metadata rows to sql
     session.commit()
+
+
+def xcorr_load_waveforms(xcorr_objects, rhandle):
+    for xcorr in xcorr_objects:
+        xcorr.waveform = xutil.bytes_to_array(rhandle.get(xcorr.waveform_redis_key))
 
 
 def ckey_dists(ckeys, stations):

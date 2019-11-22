@@ -151,7 +151,7 @@ def stream_decompose(st, wlen_sec=None, starttime=None):
     return data, sr, starttime, np.array(chan_names)
 
 
-def xcorr_ckeys_stack_slices(rawdat, sr, ckeys, cc_wlen_sec, keeplag_sec, stepsize_sec=None, whiten_freqs=None, onebit=True, random_amp=1e-12):
+def xcorr_ckeys_stack_slices(rawdat, sr, ckeys, cc_wlen_sec, keeplag_sec, stepsize_sec=None, whiten_freqs=None, onebit=True, random_amp=1e-12, pos_ratio_range=[45, 55]):
 
     ncc = len(ckeys)
     cclen = int(cc_wlen_sec * sr)
@@ -179,13 +179,16 @@ def xcorr_ckeys_stack_slices(rawdat, sr, ckeys, cc_wlen_sec, keeplag_sec, stepsi
 
     for i, sl in enumerate(slices):
         print(f"stacking slice {i} / {len(slices)}")
+        fdat.fill(0)
 
         for isig in range(nchan):
             sig = rawdat[isig, sl[0]:sl[1]].copy()
+            pos_ratio = 100 * len(np.where(sig > 0)[0]) / len(sig)
 
-            if np.sum(np.abs(sig)) == 0:
-                print(f"sig {isig} all zeros ")
-                sig[:] = np.random.uniform(-random_amp, random_amp, len(sig))
+            if pos_ratio < pos_ratio_range[0] or pos_ratio > pos_ratio_range[1]:
+                print(f"chan {isig}: pos_ratio {pos_ratio:.1f} not in range, setting to zero")
+                continue
+                # sig[:] = np.random.uniform(-random_amp, random_amp, len(sig))
 
             if onebit is True:
                 sig[:] = np.sign(xutil.bandpass(sig, whiten_freqs[[0, -1]], sr))
@@ -199,14 +202,6 @@ def xcorr_ckeys_stack_slices(rawdat, sr, ckeys, cc_wlen_sec, keeplag_sec, stepsi
 
         xcorr_stack_freq(fdat, ckeys, fstack)
 
-        # for j, ckey in enumerate(ckeys):
-        #     fstack[j] += np.conj(fdat[k1]) * fdat[k2]
-
-        # for j, ckey in enumerate(ckeys):
-        #     k1, k2 = ckey
-        #     # stack[j] = np.fft.irfft(np.conj(fdat[k1]) * fdat[k2])
-        #     fstack[j] += np.conj(fdat[k1]) * fdat[k2]
-
     keeplag = int(keeplag)
     stack = np.zeros((ncc, keeplag * 2), dtype=np.float32)
 
@@ -216,6 +211,14 @@ def xcorr_ckeys_stack_slices(rawdat, sr, ckeys, cc_wlen_sec, keeplag_sec, stepsi
         stack[i, keeplag:] = cc[:keeplag]
 
     return stack
+
+
+@njit
+def xcorr_stack_freq(sigs_freq, cc_keys, cc_stack_freq):
+
+    for i in range(len(cc_keys)):
+        k1, k2 = cc_keys[i]
+        cc_stack_freq[i] += np.conj(sigs_freq[k1]) * sigs_freq[k2]
 
 
 def xcorr_ckeys_stack_slices2(rawdat, sr, ckeys, cc_wlen_sec, keeplag_sec, stepsize_sec=None, whiten_freqs=None, onebit=True, random_amp=1e-9):
@@ -271,14 +274,6 @@ def xcorr_ckeys_stack_slices2(rawdat, sr, ckeys, cc_wlen_sec, keeplag_sec, steps
         stack[i, keeplag:] = cc[:keeplag]
 
     return stack
-
-
-@njit
-def xcorr_stack_freq(sigs_freq, cc_keys, cc_stack_freq):
-
-    for i in range(len(cc_keys)):
-        k1, k2 = cc_keys[i]
-        cc_stack_freq[i] += sigs_freq[k1] * sigs_freq[k2]
 
 
 def xcorr_stack_slices_gen(datgen, chans, cclen, sr_raw, sr_dec, keeplag, whiten_freqs, onebit=True):

@@ -16,8 +16,19 @@ from microquake.core.stream import Trace, Stream
 from microquake.clients.ims import web_client
 
 from obspy import UTCDateTime
+
+from scipy.stats import linregress
 # from microquake.core.helpers.time import get_time_zone
 # import json
+
+
+def linear_detrend_nan(y):
+    x = np.arange(len(y))
+    not_nan_ind = ~np.isnan(y)
+    m, b, r_val, p_val, std_err = linregress(x[not_nan_ind], y[not_nan_ind])
+    detrend_y = y - (m * x + b)
+    return detrend_y
+
 
 stations = settings.inventory.stations()
 sites = [int(sta.code) for sta in stations]
@@ -67,18 +78,24 @@ while True:
 
     for i, tr in enumerate(stream):
         print(tr)
-        # sr = tr.stats.sampling_rate
-        tr.detrend('demean')
-        tr.detrend('linear')
+        tr.data -= np.nanmean(tr.data)
+        tr.data = linear_detrend_nan(tr.data)
+        tr.data = np.nan_to_num(tr.data)
         tr.filter('bandpass', freqmin=fband[0], freqmax=fband[1])
-        sig = np.sign(tr.data[::decf])
+        sig = tr.data[::decf]
+        sig = np.sign(sig)
+        sig[sig < 0] = 0
+
         i0 = int((tr.stats.starttime - req_start_time) * dsr + 0.5)
         slen = min(len(sig), nsamp - i0)
         data[i, i0: i0 + slen] = sig[:slen]
         chan_names.append(f".{tr.stats.station}.{tr.stats.channel}")
 
+        # izero = np.where(sig == 0)[0]
+        # sig[izero] = np.random.choice([-1, 1], len(izero))
+
     chan_names = np.array(chan_names)
-    data = np.sign(data).astype(np.bool_)
+    data = data.astype(np.bool_)
 
     tstring = req_start_time.__str__()
     fname = os.path.join(os.environ['SPP_COMMON'], "data_dump", f"ob_data_{tstring}")
@@ -88,13 +105,13 @@ while True:
 ###################################################################
 
 
-from microquake.core import read
+# from microquake.core import read
 
-fname = os.path.join(os.environ['SPP_COMMON'], "cont10min.mseed")
-stream = read(fname)
-st2 = stream[::8]
+# fname = os.path.join(os.environ['SPP_COMMON'], "cont10min.mseed")
+# stream = read(fname)
+# st2 = stream[::8]
 
-fname = os.path.join(os.environ['SPP_COMMON'], "cont10min_small.mseed")
-st2.write(fname)
+# fname = os.path.join(os.environ['SPP_COMMON'], "cont10min_small.mseed")
+# st2.write(fname)
 
 

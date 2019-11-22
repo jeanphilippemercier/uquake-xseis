@@ -17,6 +17,24 @@ import io
 # from scipy.signal import sosfilt, zpk2sos, iirfilter
 
 
+def check_onebit_bool_conversion(sig_raw, set_zero_random=False):
+
+    sig = sig_raw.copy()
+
+    # to bool
+    if set_zero_random is True:
+        izero = np.where(sig == 0)[0]
+        sig[izero] = np.random.choice([-1, 1], len(izero))
+    sig[sig < 0] = 0
+    sig = np.sign(sig).astype(np.bool_)
+
+    # from bool
+    sig = sig.astype(np.float32)
+    sig[sig == 0] = -1
+
+    return sig
+
+
 def index_ckeys_split(corr_keys, chan_names):
     cdict = dict(zip(chan_names, np.arange(len(chan_names))))
     ckeys_ix = []
@@ -353,7 +371,7 @@ def angle_between_vecs(v1, v2):
 
 
 def dist(l1, l2):
-    return norm(l1 - l2)
+    return norm(np.array(l1) - np.array(l2))
 
 
 def dist2many(loc, locs):

@@ -14,27 +14,15 @@ from xseis2 import xplot
 from xseis2 import xutil
 from xseis2 import xchange
 from xseis2 import xchange_workflow as flow
-from xseis2.xsql import VelChange, XCorr, ChanPair, Base
+from xseis2.xsql import Base, Station, StationPair, VelChange, XCorr, ChanPair
 
 from loguru import logger
 from obspy import UTCDateTime
-# from microquake.core.settings import settings
-# from microquake.core.stream import Trace, Stream
 # from pytz import utc
-from microquake.plugin.site.core import read_csv
 import matplotlib.pyplot as plt
 import pickle
 
 plt.ion()
-
-# filename = "/home/phil/data/oyu/spp_common/sensors.csv"
-# inv = read_csv(filename, site_code='', has_header=True)
-# stations = inv.stations()
-# stations = sorted(stations, key=lambda x: x.code)
-
-with open(os.path.join(os.environ['SPP_COMMON'], "stations.pickle"), 'rb') as f:
-    stations = pickle.load(f)
-
 
 ################################
 logger.info('Connect to psql database')
@@ -44,12 +32,13 @@ db = create_engine(db_string)
 print(db.table_names())
 session = sessionmaker(bind=db)()
 flow.sql_drop_tables(db)
+# session.query(XCorr).delete()
+# session.query(VelChange).delete()
 session.commit()
 # session.close()
 
 Base.metadata.create_all(db)
 session.commit()
-
 
 ##################################
 logger.info('Connect to redis database')
@@ -61,25 +50,54 @@ rhandle.flushall()
 dsr = 1000.0
 # PARAMS - config
 whiten_freqs = np.array([60, 80, 320, 350])
-cc_wlen_sec = 20.0
+cc_wlen_sec = 10.0
 stepsize_sec = cc_wlen_sec
 # stepsize_sec = cc_wlen_sec / 2
 keeplag_sec = 1.0
 stacklen_sec = 100.0
 onebit = False
-min_pair_dist = 100
-max_pair_dist = 1000
+min_pair_dist = 50
+max_pair_dist = 800
 
 ####################################
 
 ###############################
 
-reload(flow)
-flow.fill_table_chanpairs(stations, session, min_pair_dist, max_pair_dist)
-# db_corr_keys = np.array([x[0] for x in session.query(ChanPair.corr_key).filter(ChanPair.inter_dist < max_pair_dist).filter(ChanPair.inter_dist > min_pair_dist).all()])
-db_corr_keys = np.array([x[0] for x in session.query(ChanPair.corr_key).all()])
+with open(os.path.join(os.environ['SPP_COMMON'], "stations.pickle"), 'rb') as f:
+    stations_pkl = pickle.load(f)
 
-logger.info(f'{len(db_corr_keys)} potential corr keys')
+flow.fill_table_stations(stations_pkl, session)
+stations = session.query(Station).all()
+
+flow.fill_table_station_pairs(stations, session)
+pairs = session.query(StationPair).all()
+
+
+
+# corr_key = f".{sta1.code}.{chan1.code.upper()}_.{sta2.code}.{chan2.code.upper()}"
+
+# reload(flow)
+# flow.fill_table_chanpairs(stations, session, min_pair_dist, max_pair_dist)
+
+# db_corr_keys = np.array([x[0] for x in session.query(ChanPair.corr_key).all()])
+
+# logger.info(f'{len(db_corr_keys)} potential corr keys')
+###################################
+
+
+# sta = stations[0]
+# chans = [c.code for c in sta.channels]
+# db_station = Station(name=sta.code, channels=chans, location=sta.loc)
+
+
+
+
+
+
+
+
+
+
 
 ###############################
 
@@ -87,9 +105,9 @@ data_src = os.path.join(os.environ['SPP_COMMON'], "data_dump")
 # data_src = params['data_connector']['data_source']['location']
 data_fles = np.sort(glob(os.path.join(data_src, '*.npz')))
 
-fname = data_fles[0]
-# fh = np.load(fname, start_time=tstring, data=data, sr=dsr, chans=chan_names)
+# data, sr, starttime, chan_names = xchange.stream_decompose(stream)
 
+fname = data_fles[0]
 # npz = np.load(fname)
 with np.load(fname) as npz:
     sr = float(npz['sr'])
@@ -97,96 +115,77 @@ with np.load(fname) as npz:
     starttime = UTCDateTime(str(npz['start_time']))
     data = npz['data'].astype(np.float32)
     data[data == 0] = -1
-
-ratios = np.array([100 * len(np.where(sig > 0)[0]) / len(sig) for sig in data])
-
-# plt.plot(ratios)
-
-rawdat = data
-nchan, nsamp = rawdat.shape
-
-cclen = int(cc_wlen_sec * sr)
-slices = xutil.build_slice_inds(0, nsamp, cclen)
-
-out = np.zeros((nchan, len(slices)))
-for i, sl in enumerate(slices):
-    print(f"stacking slice {i} / {len(slices)}")
-
-    for isig in range(nchan):
-        sig = rawdat[isig, sl[0]:sl[1]].copy()
-        pos_ratio = 100 * len(np.where(sig > 0)[0]) / len(sig)
-        out[isig][i] = pos_ratio
-
-reload(xplot)
-xplot.im(out, norm=False)
-plt.xlabel("slice #")
-plt.ylabel("channel #")
-plt.title("positive value ratio")
-
-xplot.quicksave()
-
-plt.plot(data[84])
-plt.plot(out.T, marker='o', alpha=0.2)
-xplot.quicksave()
-
-
-ix = np.argmin(ratios)
-ix = 7
-sig = data[ix]
-# plt.plot(sig)
-# sig = np.zeros(len(sig))
-pos_ratio = 100 * len(np.where(sig > 0)[0]) / len(sig)
-
-nsamp = len(sig)
-cclen = int(cc_wlen_sec * sr)
-slices = xutil.build_slice_inds(0, nsamp, cclen)
-
-ratios = []
-for i, sl in enumerate(slices):
-    print(f"stacking slice {i} / {len(slices)}")
-    win = sig[sl[0]:sl[1]]
-    pos_ratio = 100 * len(np.where(win > 0)[0]) / len(win)
-    ratios.append(pos_ratio)
-
-plt.plot(ratios, marker='o')
-################################################
-
-
-
-#################################
-# sta_ids = np.arange(130).astype(str)
-# sta_ids = np.array([sta.code for sta in stations])[::10]
-# stream = flow.get_continuous_fake(start_time, end_time, sta_ids, sr=dsr)
-# stream.sort()
-# reload(xchange)
-
-# data, sr, starttime, chan_names = xchange.stream_decompose(stream)
-# np.allclose(data[10], stream[10].data)
 # data[30] = np.roll(data[10], 100)
-# data[[30, 10], :100000] = 0
 # print(chan_names[30], chan_names[10])
 
 
-fname = data_fles[0]
-# npz = np.load(fname)
-with np.load(fname) as npz:
-    sr = float(npz['sr'])
-    chan_names = npz['chans']
-    starttime = UTCDateTime(str(npz['start_time']))
-    data = npz['data'].astype(np.float32)
-    data[data == 0] = -1
-
-
+reload(xchange)
 reload(xutil)
 ckeys_all_str = [f"{k[0]}_{k[1]}"for k in xutil.unique_pairs(chan_names)]
-ckeys = sorted(list(set(db_corr_keys) & set(ckeys_all_str)))
+ckeys = np.array(sorted(list(set(db_corr_keys) & set(ckeys_all_str))))
 ckeys_ix = xutil.index_ckeys_split(ckeys, chan_names)
 logger.info(f'{len(ckeys)} matching ckeys')
 
 dc = xchange.xcorr_ckeys_stack_slices(data, sr, ckeys_ix, cc_wlen_sec, keeplag_sec, stepsize_sec=stepsize_sec, whiten_freqs=whiten_freqs, onebit=onebit)
 
-# session.query(XCorr).delete()
+session.query(XCorr).delete()
 flow.fill_table_xcorrs(dc, ckeys, starttime.datetime, session, rhandle)
+
+dd = [session.query(ChanPair.inter_dist).filter(ChanPair.corr_key == key).first()[0] for key in ckeys]
+
+reload(xplot)
+im = xplot.im(dc[np.argsort(dd)], norm=False)
+xplot.HookImageMax(im)
+
+mx = np.max(dc, axis=1)
+plt.plot(mx)
+
+# dat
+# ckeys[0:10]
+wild = f".115.%.116.%"
+xcorrs = session.query(XCorr).filter(XCorr.corr_key.like(wild)).all()
+
+reload(flow)
+flow.xcorr_load_waveforms(xcorrs, rhandle)
+
+dat = np.array([x.waveform for x in xcorrs])
+
+plt.plot(dat.T)
+
+
+
+ccfs = [xutil.bytes_to_array(rhandle.get(cc.waveform_redis_key)) for cc in out]
+ccfs = np.array(ccfs)
+
+im = xplot.im(ccfs, norm=False)
+xplot.HookImageMax(im)
+
+
+a = out[0]
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 ################################################
 
