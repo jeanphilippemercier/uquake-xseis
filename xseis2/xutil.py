@@ -17,6 +17,40 @@ import io
 # from scipy.signal import sosfilt, zpk2sos, iirfilter
 
 
+def average_adjacent_rows(dat, nrow_avg):
+    nrow, ncol = dat.shape
+    nrow_new = nrow // nrow_avg
+    row_mutliple = int(nrow_new * nrow_avg)
+
+    out = dat[:row_mutliple].reshape((nrow_new, nrow_avg, ncol))
+    out = np.mean(out, axis=1)
+    return out
+
+
+def to_dict_of_lists(list_of_dicts):
+    ex_dict = list_of_dicts[0]
+    dict_of_lists = {k: [] for k in ex_dict.keys()}
+
+    for d in list_of_dicts:
+        for k, v in d.items():
+            dict_of_lists[k].append(v)
+
+    for k, v in dict_of_lists.items():
+        dict_of_lists[k] = np.array(v)
+
+    return dict_of_lists
+
+
+def maxnorm(dat, scale=1):
+    out = dat - np.mean(dat)
+    return out * scale / np.max(np.abs(out))
+
+
+def xcorr_lagtimes(nsamp, sr=1):
+    hl = nsamp / 2 * sr
+    return np.linspace(-hl, hl, nsamp)
+
+
 def check_onebit_bool_conversion(sig_raw, set_zero_random=False):
 
     sig = sig_raw.copy()

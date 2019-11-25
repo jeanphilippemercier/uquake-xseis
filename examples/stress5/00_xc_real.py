@@ -14,7 +14,8 @@ from xseis2 import xplot
 from xseis2 import xutil
 from xseis2 import xchange
 from xseis2 import xchange_workflow as flow
-from xseis2.xsql import Base, Channel, Station, StationPair, VelChange, XCorr, ChanPair
+from xseis2.xsql import Base, Channel, Station, StationPair, VelChange, XCorr, ChanPair, DataFile
+# from sqlalchemy.sql import exists
 
 import itertools
 
@@ -28,63 +29,46 @@ plt.ion()
 
 ################################
 logger.info('Connect to psql database')
-
 db_string = "postgres://postgres:postgres@localhost"
 db = create_engine(db_string)
 print(db.table_names())
 session = sessionmaker(bind=db)()
-flow.sql_drop_tables(db)
+# flow.sql_drop_tables(db)
 # session.query(XCorr).delete()
 # session.query(VelChange).delete()
-session.commit()
+# session.commit()
 # session.close()
-
 Base.metadata.create_all(db)
 session.commit()
 
 ##################################
 logger.info('Connect to redis database')
-
 rhandle = redis.Redis(host='localhost', port=6379, db=0)
-rhandle.flushall()
+# rhandle.flushall()
 ###################################
 
 dsr = 1000.0
 # PARAMS - config
-whiten_freqs = np.array([60, 80, 320, 350])
+whiten_freqs = np.array([60, 80, 300, 320])
 cc_wlen_sec = 10.0
 stepsize_sec = cc_wlen_sec
 # stepsize_sec = cc_wlen_sec / 2
 keeplag_sec = 1.0
 stacklen_sec = 100.0
-onebit = False
 min_pair_dist = 50
-max_pair_dist = 200
+max_pair_dist = 400
+onebit = False
 
 ####################################
 
+# with open(os.path.join(os.environ['SPP_COMMON'], "stations.pickle"), 'rb') as f:
+#     stations_pkl = pickle.load(f)
+
+# flow.fill_tables_sta_chan(stations_pkl, session)
+# stations = session.query(Station).all()
+# flow.fill_table_station_pairs(stations, session)
+
 ###############################
-
-with open(os.path.join(os.environ['SPP_COMMON'], "stations.pickle"), 'rb') as f:
-    stations_pkl = pickle.load(f)
-
-
-reload(flow)
-flow.fill_tables_sta_chan(stations_pkl, session)
-
-# flow.fill_table_stations(stations_pkl, session)
-stations = session.query(Station).all()
-channels = session.query(Channel).all()
-
-flow.fill_table_station_pairs(stations, session)
-pairs = session.query(StationPair).all()
-
-c = channels[10]
-p = pairs[30]
-
-p.station1
-p.station2
-
 
 pairs = session.query(StationPair).filter(StationPair.dist.between(min_pair_dist, max_pair_dist)).filter().all()
 
@@ -100,46 +84,78 @@ data_src = os.path.join(os.environ['SPP_COMMON'], "data_dump")
 # data_src = params['data_connector']['data_source']['location']
 data_fles = np.sort(glob(os.path.join(data_src, '*.npz')))
 
-# data, sr, starttime, chan_names = xchange.stream_decompose(stream)
+fproc = session.query(DataFile).all()
+print(fproc)
 
-fname = data_fles[0]
-# npz = np.load(fname)
-with np.load(fname) as npz:
-    sr = float(npz['sr'])
-    chan_names = npz['chans']
-    starttime = UTCDateTime(str(npz['start_time'])).datetime
-    data = npz['data'].astype(np.float32)
-    data[data == 0] = -1
-# data[30] = np.roll(data[10], 100)
-# print(chan_names[30], chan_names[10])
-# chan_names = np.array([v[1:] for v in chan_names])
-endtime = starttime + timedelta(seconds=data.shape[1] / sr)
-print(starttime, endtime)
-
-# dt = (endtime - starttime).total_seconds() / 3600
 
 reload(xchange)
 reload(xutil)
 reload(flow)
-ckeys_all_str = np.array([f"{k[0]}_{k[1]}"for k in xutil.unique_pairs(chan_names)])
-ckeys = np.array(sorted(list(set(db_corr_keys) & set(ckeys_all_str))))
-ckeys_ix = xutil.index_ckeys_split(ckeys, chan_names)
-logger.info(f'{len(ckeys)} matching ckeys')
+# session.query(XCorr).delete()
 
-dc = xchange.xcorr_ckeys_stack_slices(data, sr, ckeys_ix, cc_wlen_sec, keeplag_sec, stepsize_sec=stepsize_sec, whiten_freqs=whiten_freqs, onebit=onebit)
+for i, fname in enumerate(data_fles[:]):
+    print(f"processing {i} / {len(data_fles)}")
 
-session.query(XCorr).delete()
-flow.fill_table_xcorrs(dc, ckeys, starttime, endtime, session, rhandle)
+    basename = os.path.basename(fname)
+
+    exists = session.query(DataFile.name).filter_by(name=basename).scalar() is not None
+
+    if exists:
+        print(f"already processed, skipping")
+        continue
+
+    data, sr, starttime, endtime, chan_names = flow.load_npz_continuous(fname)
+
+    ckeys_all_str = np.array([f"{k[0]}_{k[1]}"for k in xutil.unique_pairs(chan_names)])
+    ckeys = np.array(sorted(list(set(db_corr_keys) & set(ckeys_all_str))))
+    ckeys_ix = xutil.index_ckeys_split(ckeys, chan_names)
+    logger.info(f'{len(ckeys)} matching ckeys')
+
+    dc, nstack = xchange.xcorr_ckeys_stack_slices(data, sr, ckeys_ix, cc_wlen_sec, keeplag_sec, stepsize_sec=stepsize_sec, whiten_freqs=whiten_freqs, onebit=onebit)
+
+    flow.fill_table_xcorrs(dc, nstack, ckeys, starttime, endtime, session, rhandle)
+
+    session.add(DataFile(name=basename, status=True))
+    session.commit()
+
+###################################################
 
 
-wild = f".115.%.116.%"
-xcorrs = session.query(XCorr).filter(XCorr.corr_key.like(wild)).all()
+
+
+
+
+
+
+
+
+
+###################################
+# plt.plot(nstack)
+
+# nchan = len(data)
+# stack_flag = np.ones(nchan, dtype=bool)
+# stack_flag[0] = False
+# stack_flag[92] = False
+# stack_flag[ckeys_ix]
+
+# ikeep = np.where(np.sum(stack_flag[ckeys_ix], axis=1) == 2)[0]
+
+
+############################################
+
+###########################
 
 # wild = f"%115%"
 # xcorrs = session.query(XCorr).filter(XCorr.stationpair_name.like(wild)).all()
 # cc = xcorrs[0]
 
-xcorrs = session.query(XCorr).all()
+# wild = f".115.%.116.%"
+wild = f".115.Z%116.Z"
+xcorrs = session.query(XCorr).filter(XCorr.corr_key.like(wild)).all()
+# xcorrs = session.query(XCorr).all()
+print(len(xcorrs))
+xc = xcorrs[0]
 
 reload(flow)
 flow.xcorr_load_waveforms(xcorrs, rhandle)
@@ -147,96 +163,47 @@ flow.xcorr_load_waveforms(xcorrs, rhandle)
 dd = [x.stationpair.dist for x in xcorrs]
 dat = np.array([x.waveform for x in xcorrs])
 
+im = xplot.im(dat, norm=True)
 
 reload(xplot)
 im = xplot.im(dat[np.argsort(dd)], norm=False)
 xplot.HookImageMax(im)
+#######################
 
-mx = np.max(dc, axis=1)
-plt.plot(mx)
-imax = np.argmax(mx)
-plt.plot(dat[imax])
-xcorrs[imax]
-# dat
-# ckeys[0:10]
-wild = f".115.%.116.%"
-xcorrs = session.query(XCorr).filter(XCorr.corr_key.like(wild)).all()
+sig1 = np.mean(dat[:4], axis=0)
+sig2 = np.mean(dat[17:], axis=0)
+dist = xcorrs[0].stationpair.dist
 
-reload(flow)
-flow.xcorr_load_waveforms(xcorrs, rhandle)
-
-dat = np.array([x.waveform for x in xcorrs])
-
-plt.plot(dat.T)
-
-
-
-ccfs = [xutil.bytes_to_array(rhandle.get(cc.waveform_redis_key)) for cc in out]
-ccfs = np.array(ccfs)
-
-im = xplot.im(ccfs, norm=False)
-xplot.HookImageMax(im)
-
-
-a = out[0]
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-################################################
-
-
-flow.fill_table_chanpairs(stations, session, min_pair_dist, max_pair_dist)
-db_corr_keys = np.array([x[0] for x in session.query(ChanPair.corr_key).all()])
-logger.info(f'{len(db_corr_keys)} potential corr keys')
-
+# keeplag_sec = 1.0
 
 reload(xchange)
-reload(flow)
-curtime = datetime.utcnow()
-req_times = [curtime + timedelta(seconds=i * stacklen_sec) for i in range(5)]
-session.query(XCorr).delete()
+coda_start_vel = 3200.
+coda_end_sec = 0.8
+dvv_wlen_sec = 0.05
 
-for i, req_start_time in enumerate(req_times):
-    req_end_time = req_start_time + timedelta(seconds=stacklen_sec)
+coda_start_sec = dist / coda_start_vel
 
-    sta_ids = np.array([sta.code for sta in stations])[::10]
-    stream = flow.get_continuous_fake(req_start_time, req_end_time, sta_ids, sr=dsr)
-    stream.sort()
-    data, sr, starttime, chan_names = xchange.stream_decompose(stream)
+fband_sig = np.array([60, 80, 320, 350])
+# fband_sig = np.array([50, 80, 170, 180])
+whiten_freqs = fband_sig
 
-    reload(xutil)
-    ckeys_all_str = [f"{k[0]}_{k[1]}"for k in xutil.unique_pairs(chan_names)]
-    ckeys = sorted(list(set(db_corr_keys) & set(ckeys_all_str)))
-    ckeys_ix = xutil.index_ckeys_split(ckeys, chan_names)
-    logger.info(f'{len(ckeys)} matching ckeys')
+dvv_outlier_clip = 0.1
+# dvv_outlier_clip = None
 
-    dc = xchange.xcorr_ckeys_stack_slices(data, sr, ckeys_ix, cc_wlen_sec, keeplag_sec, stepsize_sec=stepsize_sec, whiten_freqs=whiten_freqs, onebit=onebit)
+reload(xutil)
+reload(xchange)
+vals = xchange.dvv(sig1, sig2, sr, dvv_wlen_sec, whiten_freqs, coda_start_sec, coda_end_sec, dvv_outlier_clip=dvv_outlier_clip)
 
-    flow.fill_table_xcorrs(dc, ckeys, starttime.datetime, session, rhandle)
+reload(xchange)
+xchange.plot_dvv(vals)
+xv = xutil.xcorr_lagtimes(len(sig1))
+plt.plot(xv, xutil.maxnorm(sig1, 5), alpha=0.3)
+plt.plot(xv, xutil.maxnorm(sig2, 5), alpha=0.3)
 
-############################################
+xplot.quicksave()
+
+
+########################
 
 
 # def measure_dvv_xcorrs(session, rhandle):
@@ -311,6 +278,60 @@ for cpair in chan_pairs:
 
 
 
+
+
+
+
+
+
+
+###########################
+# wild = f".115.%.116.%"
+# xcorrs = session.query(XCorr).filter(XCorr.corr_key.like(wild)).all()
+
+# wild = f"%115%"
+# xcorrs = session.query(XCorr).filter(XCorr.stationpair_name.like(wild)).all()
+# cc = xcorrs[0]
+
+xcorrs = session.query(XCorr).all()
+
+reload(flow)
+flow.xcorr_load_waveforms(xcorrs, rhandle)
+
+dd = [x.stationpair.dist for x in xcorrs]
+dat = np.array([x.waveform for x in xcorrs])
+
+
+reload(xplot)
+im = xplot.im(dat[np.argsort(dd)], norm=False)
+xplot.HookImageMax(im)
+
+mx = np.max(dc, axis=1)
+plt.plot(mx)
+imax = np.argmax(mx)
+plt.plot(dat[imax])
+xcorrs[imax]
+# dat
+# ckeys[0:10]
+wild = f".115.%.116.%"
+xcorrs = session.query(XCorr).filter(XCorr.corr_key.like(wild)).all()
+
+reload(flow)
+flow.xcorr_load_waveforms(xcorrs, rhandle)
+
+dat = np.array([x.waveform for x in xcorrs])
+
+plt.plot(dat.T)
+
+
+ccfs = [xutil.bytes_to_array(rhandle.get(cc.waveform_redis_key)) for cc in out]
+ccfs = np.array(ccfs)
+
+im = xplot.im(ccfs, norm=False)
+xplot.HookImageMax(im)
+
+
+a = out[0]
 
 
 

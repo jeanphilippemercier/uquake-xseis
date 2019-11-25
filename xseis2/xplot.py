@@ -22,7 +22,7 @@ def quicksave(fig=None, savedir=None, prefix='py', dpi=100):
     if fig is None:
         fig = plt.gcf()
     if savedir is None:
-        savedir = os.path.join(os.environ['HOME'], "Pictures")
+        savedir = os.path.join(os.environ['HOME'], "Pictures", "ot")
     tstamp = datetime.datetime.now().strftime('%Y-%m-%d_%H%M%S')
     fname = f"{prefix}_{tstamp}.png"
     fpath = os.path.join(savedir, fname)

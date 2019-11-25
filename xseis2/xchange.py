@@ -64,7 +64,7 @@ def dvv(cc1, cc2, sr, wlen_sec, cfreqs, coda_start_sec, coda_end_sec, interp_fac
     ikeep = np.arange(len(xv))
 
     is_coda = np.abs(xv) > coda_start
-    n_outlier = None
+    n_outlier = 0
 
     if dvv_outlier_clip is not None:
         is_outlier = np.abs(imax / xv) < (dvv_outlier_clip / 100)
@@ -74,16 +74,17 @@ def dvv(cc1, cc2, sr, wlen_sec, cfreqs, coda_start_sec, coda_end_sec, interp_fac
     else:
         ikeep = np.where((is_coda))[0]
 
-    # yint, slope, res = linear_regression_zforce(xv[ikeep], imax[ikeep], coh[ikeep] ** 2)
-    regress = linear_regression_zforce(xv[ikeep], imax[ikeep], coh[ikeep] ** 2)
+    if n_outlier < 90:
+        regress = linear_regression_zforce(xv[ikeep], imax[ikeep], coh[ikeep] ** 2)
+    else:
+        regress = [0, 0, 0]
+
     yint, slope, res = regress
     dvv_percentage = -slope * 100
-    # print(coeff)
-    # print(res)
-    # print("tt_change: %.5f%% ss_res: %.4e " % (dvv_percentage, res))
+
     print(f"[dvv: {dvv_percentage:.4f}%] [corr_coeff: {coeff:.2f}] [outliers: {n_outlier}%] [res_fit: {res:.4f}]")
 
-    out = {"dvv": dvv_percentage, "regress": regress, "xvals": xv, "imax": imax, "coh": coh, "coda_win": [coda_start, coda_end], "ikeep": ikeep, "coeff": coeff, "n_outlier": n_outlier}
+    out = {"dvv": float(dvv_percentage), "regress": regress, "xvals": xv, "imax": imax, "coh": coh, "coda_win": [coda_start, coda_end], "ikeep": ikeep, "coeff": float(coeff), "n_outlier": float(n_outlier)}
 
     return out
 
@@ -151,7 +152,7 @@ def stream_decompose(st, wlen_sec=None, starttime=None):
     return data, sr, starttime, np.array(chan_names)
 
 
-def xcorr_ckeys_stack_slices(rawdat, sr, ckeys, cc_wlen_sec, keeplag_sec, stepsize_sec=None, whiten_freqs=None, onebit=True, random_amp=1e-12, pos_ratio_range=[45, 55]):
+def xcorr_ckeys_stack_slices(rawdat, sr, ckeys, cc_wlen_sec, keeplag_sec, stepsize_sec=None, whiten_freqs=None, onebit=True, pos_ratio_range=[45, 55]):
 
     ncc = len(ckeys)
     cclen = int(cc_wlen_sec * sr)
@@ -167,28 +168,35 @@ def xcorr_ckeys_stack_slices(rawdat, sr, ckeys, cc_wlen_sec, keeplag_sec, stepsi
 
     nchan, nsamp = rawdat.shape
     slices = xutil.build_slice_inds(0, nsamp, cclen, stepsize=stepsize)
+    nslices = len(slices)
 
     whiten_win = None
     if whiten_freqs is not None:
         whiten_win = xutil.freq_window(whiten_freqs, padlen, sr)
 
-    logger.info(f'Computing {ncc} xcorrs for {len(slices)} slices of {cc_wlen_sec}s each')
+    logger.info(f'Computing {ncc} xcorrs for {nslices} slices of {cc_wlen_sec}s each')
 
-    fstack = np.zeros((ncc, nfreq), dtype=np.complex64)
+    cc_stack_freq = np.zeros((ncc, nfreq), dtype=np.complex64)
     fdat = np.zeros((nchan, nfreq), dtype=np.complex64)
+    # quality = np.zeros((nchan, nslices), dtype=np.float32)
+    nstack = np.zeros(ncc, dtype=np.float32)
+    stack_flag = np.zeros(nchan, dtype=bool)
 
     for i, sl in enumerate(slices):
-        print(f"stacking slice {i} / {len(slices)}")
+        print(f"stacking slice {i} / {nslices}")
         fdat.fill(0)
 
         for isig in range(nchan):
             sig = rawdat[isig, sl[0]:sl[1]].copy()
             pos_ratio = 100 * len(np.where(sig > 0)[0]) / len(sig)
+            # quality[isig][i] = pos_ratio
 
             if pos_ratio < pos_ratio_range[0] or pos_ratio > pos_ratio_range[1]:
-                print(f"chan {isig}: pos_ratio {pos_ratio:.1f} not in range, setting to zero")
+                # print(f"chan {isig}: pos_ratio {pos_ratio:.1f} not in range, setting to zero")
+                stack_flag[isig] = 0
                 continue
-                # sig[:] = np.random.uniform(-random_amp, random_amp, len(sig))
+
+            stack_flag[isig] = 1
 
             if onebit is True:
                 sig[:] = np.sign(xutil.bandpass(sig, whiten_freqs[[0, -1]], sr))
@@ -198,191 +206,32 @@ def xcorr_ckeys_stack_slices(rawdat, sr, ckeys, cc_wlen_sec, keeplag_sec, stepsi
                 fsig = whiten_win * xutil.phase(fsig)
             else:
                 fsig /= np.sqrt(xutil.energy_freq(fsig))
+
             fdat[isig] = fsig
 
-        xcorr_stack_freq(fdat, ckeys, fstack)
+        cc_ikeep = np.where(np.sum(stack_flag[ckeys], axis=1) == 2)[0]
+        nstack[cc_ikeep] += 1
+        xcorr_stack_freq(fdat, ckeys, cc_stack_freq, cc_ikeep)
 
     keeplag = int(keeplag)
-    stack = np.zeros((ncc, keeplag * 2), dtype=np.float32)
+    cc_stack = np.zeros((ncc, keeplag * 2), dtype=np.float32)
 
     for i in range(ncc):
-        cc = np.fft.irfft(fstack[i]) / len(slices)
-        stack[i, :keeplag] = cc[-keeplag:]
-        stack[i, keeplag:] = cc[:keeplag]
+        cc = np.fft.irfft(cc_stack_freq[i]) / nslices
+        cc_stack[i, :keeplag] = cc[-keeplag:]
+        cc_stack[i, keeplag:] = cc[:keeplag]
 
-    return stack
+    nstack = nstack * 100 / nslices
+
+    return cc_stack, nstack
 
 
 @njit
-def xcorr_stack_freq(sigs_freq, cc_keys, cc_stack_freq):
+def xcorr_stack_freq(sigs_freq, cc_keys, cc_stack_freq, cc_ikeep):
 
-    for i in range(len(cc_keys)):
-        k1, k2 = cc_keys[i]
-        cc_stack_freq[i] += np.conj(sigs_freq[k1]) * sigs_freq[k2]
-
-
-def xcorr_ckeys_stack_slices2(rawdat, sr, ckeys, cc_wlen_sec, keeplag_sec, stepsize_sec=None, whiten_freqs=None, onebit=True, random_amp=1e-9):
-
-    ncc = len(ckeys)
-    cclen = int(cc_wlen_sec * sr)
-    keeplag = int(keeplag_sec * sr)
-    stepsize = int(stepsize_sec * sr)
-
-    padlen = int(cc_wlen_sec * sr * 2)
-    nfreq = int(padlen // 2 + 1)
-    whiten_freqs = np.array(whiten_freqs)
-
-    logger.info(f'ncc: {ncc}, cclen: {cc_wlen_sec}s, keeplag: {keeplag_sec}s, stepsize: {stepsize_sec} s')
-    # print(cclen, padlen, keeplag, stepsize)
-
-    nchan, nsamp = rawdat.shape
-    slices = xutil.build_slice_inds(0, nsamp, cclen, stepsize=stepsize)
-
-    whiten_win = None
-    if whiten_freqs is not None:
-        whiten_win = xutil.freq_window(whiten_freqs, padlen, sr)
-
-    logger.info(f'Computing {ncc} xcorrs for {len(slices)} slices of {cc_wlen_sec}s each')
-
-    fstack = np.zeros((ncc, nfreq), dtype=np.complex64)
-
-    for i, sl in enumerate(slices):
-        print(f"stacking slice {i} / {len(slices)}")
-        dat = rawdat[:, sl[0]:sl[1]].copy()
-
-        if onebit is True:
-            dat = xutil.bandpass(dat, whiten_freqs[[0, -1]], sr)
-            dat = np.sign(dat)
-
-        fdat = np.fft.rfft(dat, axis=1, n=padlen)
-
-        if whiten_win is not None:
-            for irow in range(fdat.shape[0]):
-                fdat[irow] = whiten_win * xutil.phase(fdat[irow])
-        else:
-            for irow in range(fdat.shape[0]):
-                fdat[irow] /= np.sqrt(xutil.energy_freq(fdat[irow]))
-
-        xcorr_stack_freq(fdat, ckeys, fstack)
-
-    keeplag = int(keeplag)
-    stack = np.zeros((ncc, keeplag * 2), dtype=np.float32)
-
-    for i in range(ncc):
-        cc = np.fft.irfft(fstack[i]) / len(slices)
-        stack[i, :keeplag] = cc[-keeplag:]
-        stack[i, keeplag:] = cc[:keeplag]
-
-    return stack
-
-
-def xcorr_stack_slices_gen(datgen, chans, cclen, sr_raw, sr_dec, keeplag, whiten_freqs, onebit=True):
-
-    ckeys = xutil.unique_pairs(np.arange(len(chans)))
-    ckeys = xutil.ckeys_remove_intersta(ckeys, chans)
-
-    ncc = len(ckeys)
-    padlen = int(cclen * sr_dec * 2)
-    nfreq = int(padlen // 2 + 1)
-    whiten_freqs = np.array(whiten_freqs)
-
-    dec_factor = None
-    if not np.allclose(sr_raw, sr_dec):
-        dec_factor = int(sr_raw / sr_dec)
-
-    whiten_win = None
-    if whiten_freqs is not None:
-        whiten_win = xutil.freq_window(whiten_freqs, padlen, sr_dec)
-
-    fstack = np.zeros((ncc, nfreq), dtype=np.complex64)
-
-    nstack = 0
-    for dat in datgen:
-
-        dat = xutil.bandpass(dat, whiten_freqs[[0, -1]], sr_raw)
-
-        if dec_factor is not None:
-            dat = dat[:, ::dec_factor]
-
-        if onebit is True:
-            dat = np.sign(dat)
-
-        fdat = np.fft.rfft(dat, axis=1, n=padlen)
-
-        for irow in range(fdat.shape[0]):
-            fdat[irow] = whiten_win * xutil.phase(fdat[irow])
-
-        for j, ckey in enumerate(ckeys):
-            k1, k2 = ckey
-            # stack[j] = np.fft.irfft(np.conj(fdat[k1]) * fdat[k2])
-            fstack[j] += np.conj(fdat[k1]) * fdat[k2]
-
-        nstack += 1
-
-    nlag = int(keeplag * sr_dec)
-    stack = np.zeros((ncc, nlag * 2), dtype=np.float32)
-
-    for i in range(ncc):
-        cc = np.real(np.fft.irfft(fstack[i])) / nstack
-        stack[i, :nlag] = cc[-nlag:]
-        stack[i, nlag:] = cc[:nlag]
-
-    return stack, ckeys
-
-
-def xcorr_stack_slices2(hstream, starttime, endtime, chans, cclen, keeplag, whiten_freqs, onebit=True):
-
-    # slices = xutil.build_slice_inds(i0, i1, cclen, stepsize=stepsize)
-    sr = hstream.samplerate
-    ckeys = xutil.unique_pairs(np.arange(len(chans)))
-    ckeys = xutil.ckeys_remove_intersta(ckeys, chans)
-
-    ncc = len(ckeys)
-    padlen = int(cclen * sr * 2)
-    nfreq = int(padlen // 2 + 1)
-
-    whiten_win = None
-    if whiten_freqs is not None:
-        whiten_win = xutil.freq_window(whiten_freqs, padlen, sr)
-
-    fstack = np.zeros((ncc, nfreq), dtype=np.complex64)
-    cclen_td = timedelta(seconds=cclen)
-    t0 = starttime
-    t1 = starttime + cclen_td
-    nstack = 0
-
-    # sliding window of cclen until endtime
-    while (t1 < endtime - cclen_td):
-        print(t0, t1)
-        dat = hstream.query(chans, t0, t1)
-
-        if onebit is True:
-            dat = xutil.bandpass(dat, whiten_freqs[[0, -1]], sr)
-            dat = np.sign(dat)
-
-        fdat = np.fft.rfft(dat, axis=1, n=padlen)
-
-        for irow in range(fdat.shape[0]):
-            fdat[irow] = whiten_win * xutil.phase(fdat[irow])
-
-        for j, ckey in enumerate(ckeys):
-            k1, k2 = ckey
-            # stack[j] = np.fft.irfft(np.conj(fdat[k1]) * fdat[k2])
-            fstack[j] += np.conj(fdat[k1]) * fdat[k2]
-
-        t0 += cclen_td
-        t1 += cclen_td
-        nstack += 1
-
-    nlag = int(keeplag * sr)
-    stack = np.zeros((ncc, nlag * 2), dtype=np.float32)
-
-    for i in range(ncc):
-        cc = np.real(np.fft.irfft(fstack[i])) / nstack
-        stack[i, :nlag] = cc[-nlag:]
-        stack[i, nlag:] = cc[:nlag]
-
-    return stack, ckeys
+    for ixc in cc_ikeep:
+        k1, k2 = cc_keys[ixc]
+        cc_stack_freq[ixc] += np.conj(sigs_freq[k1]) * sigs_freq[k2]
 
 
 def plot_tt_change(xv, imax, coh, yint, slope, res, ik):
@@ -398,63 +247,6 @@ def plot_tt_change(xv, imax, coh, yint, slope, res, ik):
     plt.plot(xv, tfit)
     # plt.plot(xv, tfit)
     plt.title("tt_change: %.3f%% ss_res: %.3f " % (slope * 100, res))
-
-
-def linear_regression_old(xv, yv, weights, outlier_sd=None):
-    c, stats = polyfit(xv, yv, 1, full=True, w=weights)
-    yint, slope = c
-    residual = stats[0][0] / len(xv)
-    ikeep = np.arange(len(xv))
-
-    if outlier_sd is not None:
-        residuals = np.abs(yv - (yint + slope * xv))
-        std_res = np.std(residuals)
-        ikeep = np.where(residuals < std_res * outlier_sd)[0]
-        if len(ikeep) != 0:
-            c, stats = polyfit(xv[ikeep], yv[ikeep], 1, full=True, w=weights[ikeep])
-            yint, slope = c
-            residual = stats[0][0] / len(xv)
-            print("stdev residuals: %.3f" % residual)
-
-    return yint, slope, residual, ikeep
-
-
-def linear_regression2(xv, yv, weights, outlier_val=0.0025):
-    ikeep = np.where(np.abs(yv / xv) < outlier_val)[0]
-    c, stats = polyfit(xv[ikeep], yv[ikeep], 1, full=True, w=weights[ikeep])
-    yint, slope = c
-    residual = stats[0][0] / len(xv)
-
-    return yint, slope, residual, ikeep
-
-
-def linear_regression3(xv, yv, weights):
-    XX = np.vstack((xv, np.ones_like(xv))).T
-    # out = np.linalg.lstsq(XX[:, :-1], yv, rcond=None)
-    # out = np.linalg.lstsq(XX, yv, rcond=None)
-    out = np.linalg.lstsq(XX * weights[:, None], yv * weights, rcond=None)
-    print(out)
-    c = out[0]
-    residual = out[1] / len(xv)
-    slope, yint = c
-
-    return yint, slope, residual
-
-
-def linear_regression_yzero(xv, yv, weights):
-    XX = np.vstack((xv, np.ones_like(xv))).T
-    # out = np.linalg.lstsq(XX[:, :-1], yv, rcond=None)
-    out = np.linalg.lstsq(XX, yv, rcond=None)
-    # c, stats =
-    print(out)
-    c = out[0]
-    residual = out[1] / len(xv)
-
-    # # c, stats = polyfit(xv[ikeep], yv[ikeep], 1, full=True, w=weights[ikeep])
-    # yint, slope = c
-    slope, yint = c
-    # residual = stats[0][0]
-    return yint, slope, residual
 
 
 def windowed_fft(sig, slices, sr, corner_freqs, taper_percent=0.2):
@@ -867,3 +659,223 @@ def mwcs_msnoise_single(cci, cri, freqmin, freqmax, df, smoothing_half_win=5):
     return m, e, coh
 
 
+
+# def xcorr_ckeys_stack_slices2(rawdat, sr, ckeys, cc_wlen_sec, keeplag_sec, stepsize_sec=None, whiten_freqs=None, onebit=True, random_amp=1e-9):
+
+#     ncc = len(ckeys)
+#     cclen = int(cc_wlen_sec * sr)
+#     keeplag = int(keeplag_sec * sr)
+#     stepsize = int(stepsize_sec * sr)
+
+#     padlen = int(cc_wlen_sec * sr * 2)
+#     nfreq = int(padlen // 2 + 1)
+#     whiten_freqs = np.array(whiten_freqs)
+
+#     logger.info(f'ncc: {ncc}, cclen: {cc_wlen_sec}s, keeplag: {keeplag_sec}s, stepsize: {stepsize_sec} s')
+#     # print(cclen, padlen, keeplag, stepsize)
+
+#     nchan, nsamp = rawdat.shape
+#     slices = xutil.build_slice_inds(0, nsamp, cclen, stepsize=stepsize)
+
+#     whiten_win = None
+#     if whiten_freqs is not None:
+#         whiten_win = xutil.freq_window(whiten_freqs, padlen, sr)
+
+#     logger.info(f'Computing {ncc} xcorrs for {len(slices)} slices of {cc_wlen_sec}s each')
+
+#     cc_stack_freq = np.zeros((ncc, nfreq), dtype=np.complex64)
+
+#     for i, sl in enumerate(slices):
+#         print(f"stacking slice {i} / {len(slices)}")
+#         dat = rawdat[:, sl[0]:sl[1]].copy()
+
+#         if onebit is True:
+#             dat = xutil.bandpass(dat, whiten_freqs[[0, -1]], sr)
+#             dat = np.sign(dat)
+
+#         fdat = np.fft.rfft(dat, axis=1, n=padlen)
+
+#         if whiten_win is not None:
+#             for irow in range(fdat.shape[0]):
+#                 fdat[irow] = whiten_win * xutil.phase(fdat[irow])
+#         else:
+#             for irow in range(fdat.shape[0]):
+#                 fdat[irow] /= np.sqrt(xutil.energy_freq(fdat[irow]))
+
+#         xcorr_stack_freq(fdat, ckeys, cc_stack_freq)
+
+#     keeplag = int(keeplag)
+#     stack = np.zeros((ncc, keeplag * 2), dtype=np.float32)
+
+#     for i in range(ncc):
+#         cc = np.fft.irfft(cc_stack_freq[i]) / len(slices)
+#         stack[i, :keeplag] = cc[-keeplag:]
+#         stack[i, keeplag:] = cc[:keeplag]
+
+#     return stack
+
+
+# def xcorr_stack_slices_gen(datgen, chans, cclen, sr_raw, sr_dec, keeplag, whiten_freqs, onebit=True):
+
+#     ckeys = xutil.unique_pairs(np.arange(len(chans)))
+#     ckeys = xutil.ckeys_remove_intersta(ckeys, chans)
+
+#     ncc = len(ckeys)
+#     padlen = int(cclen * sr_dec * 2)
+#     nfreq = int(padlen // 2 + 1)
+#     whiten_freqs = np.array(whiten_freqs)
+
+#     dec_factor = None
+#     if not np.allclose(sr_raw, sr_dec):
+#         dec_factor = int(sr_raw / sr_dec)
+
+#     whiten_win = None
+#     if whiten_freqs is not None:
+#         whiten_win = xutil.freq_window(whiten_freqs, padlen, sr_dec)
+
+#     cc_stack_freq = np.zeros((ncc, nfreq), dtype=np.complex64)
+
+#     nstack = 0
+#     for dat in datgen:
+
+#         dat = xutil.bandpass(dat, whiten_freqs[[0, -1]], sr_raw)
+
+#         if dec_factor is not None:
+#             dat = dat[:, ::dec_factor]
+
+#         if onebit is True:
+#             dat = np.sign(dat)
+
+#         fdat = np.fft.rfft(dat, axis=1, n=padlen)
+
+#         for irow in range(fdat.shape[0]):
+#             fdat[irow] = whiten_win * xutil.phase(fdat[irow])
+
+#         for j, ckey in enumerate(ckeys):
+#             k1, k2 = ckey
+#             # stack[j] = np.fft.irfft(np.conj(fdat[k1]) * fdat[k2])
+#             cc_stack_freq[j] += np.conj(fdat[k1]) * fdat[k2]
+
+#         nstack += 1
+
+#     nlag = int(keeplag * sr_dec)
+#     stack = np.zeros((ncc, nlag * 2), dtype=np.float32)
+
+#     for i in range(ncc):
+#         cc = np.real(np.fft.irfft(cc_stack_freq[i])) / nstack
+#         stack[i, :nlag] = cc[-nlag:]
+#         stack[i, nlag:] = cc[:nlag]
+
+#     return stack, ckeys
+
+
+# def xcorr_stack_slices2(hstream, starttime, endtime, chans, cclen, keeplag, whiten_freqs, onebit=True):
+
+#     # slices = xutil.build_slice_inds(i0, i1, cclen, stepsize=stepsize)
+#     sr = hstream.samplerate
+#     ckeys = xutil.unique_pairs(np.arange(len(chans)))
+#     ckeys = xutil.ckeys_remove_intersta(ckeys, chans)
+
+#     ncc = len(ckeys)
+#     padlen = int(cclen * sr * 2)
+#     nfreq = int(padlen // 2 + 1)
+
+#     whiten_win = None
+#     if whiten_freqs is not None:
+#         whiten_win = xutil.freq_window(whiten_freqs, padlen, sr)
+
+#     cc_stack_freq = np.zeros((ncc, nfreq), dtype=np.complex64)
+#     cclen_td = timedelta(seconds=cclen)
+#     t0 = starttime
+#     t1 = starttime + cclen_td
+#     nstack = 0
+
+#     # sliding window of cclen until endtime
+#     while (t1 < endtime - cclen_td):
+#         print(t0, t1)
+#         dat = hstream.query(chans, t0, t1)
+
+#         if onebit is True:
+#             dat = xutil.bandpass(dat, whiten_freqs[[0, -1]], sr)
+#             dat = np.sign(dat)
+
+#         fdat = np.fft.rfft(dat, axis=1, n=padlen)
+
+#         for irow in range(fdat.shape[0]):
+#             fdat[irow] = whiten_win * xutil.phase(fdat[irow])
+
+#         for j, ckey in enumerate(ckeys):
+#             k1, k2 = ckey
+#             # stack[j] = np.fft.irfft(np.conj(fdat[k1]) * fdat[k2])
+#             cc_stack_freq[j] += np.conj(fdat[k1]) * fdat[k2]
+
+#         t0 += cclen_td
+#         t1 += cclen_td
+#         nstack += 1
+
+#     nlag = int(keeplag * sr)
+#     stack = np.zeros((ncc, nlag * 2), dtype=np.float32)
+
+#     for i in range(ncc):
+#         cc = np.real(np.fft.irfft(cc_stack_freq[i])) / nstack
+#         stack[i, :nlag] = cc[-nlag:]
+#         stack[i, nlag:] = cc[:nlag]
+
+#     return stack, ckeys
+
+
+# def linear_regression_old(xv, yv, weights, outlier_sd=None):
+#     c, stats = polyfit(xv, yv, 1, full=True, w=weights)
+#     yint, slope = c
+#     residual = stats[0][0] / len(xv)
+#     ikeep = np.arange(len(xv))
+
+#     if outlier_sd is not None:
+#         residuals = np.abs(yv - (yint + slope * xv))
+#         std_res = np.std(residuals)
+#         ikeep = np.where(residuals < std_res * outlier_sd)[0]
+#         if len(ikeep) != 0:
+#             c, stats = polyfit(xv[ikeep], yv[ikeep], 1, full=True, w=weights[ikeep])
+#             yint, slope = c
+#             residual = stats[0][0] / len(xv)
+#             print("stdev residuals: %.3f" % residual)
+
+#     return yint, slope, residual, ikeep
+
+
+# def linear_regression2(xv, yv, weights, outlier_val=0.0025):
+#     ikeep = np.where(np.abs(yv / xv) < outlier_val)[0]
+#     c, stats = polyfit(xv[ikeep], yv[ikeep], 1, full=True, w=weights[ikeep])
+#     yint, slope = c
+#     residual = stats[0][0] / len(xv)
+
+#     return yint, slope, residual, ikeep
+
+
+# def linear_regression3(xv, yv, weights):
+#     XX = np.vstack((xv, np.ones_like(xv))).T
+#     # out = np.linalg.lstsq(XX[:, :-1], yv, rcond=None)
+#     # out = np.linalg.lstsq(XX, yv, rcond=None)
+#     out = np.linalg.lstsq(XX * weights[:, None], yv * weights, rcond=None)
+#     print(out)
+#     c = out[0]
+#     residual = out[1] / len(xv)
+#     slope, yint = c
+
+#     return yint, slope, residual
+
+
+# def linear_regression_yzero(xv, yv, weights):
+#     XX = np.vstack((xv, np.ones_like(xv))).T
+#     # out = np.linalg.lstsq(XX[:, :-1], yv, rcond=None)
+#     out = np.linalg.lstsq(XX, yv, rcond=None)
+#     # c, stats =
+#     print(out)
+#     c = out[0]
+#     residual = out[1] / len(xv)
+
+#     # # c, stats = polyfit(xv[ikeep], yv[ikeep], 1, full=True, w=weights[ikeep])
+#     # yint, slope = c
+#     slope, yint = c
+#     # residual = stats[0][0]
+#     return yint, slope, residual

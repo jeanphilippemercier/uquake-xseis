@@ -12,24 +12,87 @@ from xseis2 import xutil
 from xseis2 import xchange
 # from xseis2 import xio
 
-from xseis2.xsql import Station, StationPair, VelChange, XCorr, ChanPair
+from xseis2.xsql import Channel, Station, StationPair, VelChange, XCorr, ChanPair
 
 from loguru import logger
 
+# name = Column(String(10), primary_key=True)
+#     component = Column(String(5))
+#     station = Column(String(10))
+#     quality = Column(Integer)
+#     samplerate = Column(Float)
 
-def fill_table_stations(stations, session, clear=True):
+
+def load_npz_continuous(fname):
+    from obspy import UTCDateTime
+
+    with np.load(fname) as npz:
+        sr = float(npz['sr'])
+        chan_names = npz['chans']
+        starttime = UTCDateTime(str(npz['start_time'])).datetime
+        data = npz['data'].astype(np.float32)
+        data[data == 0] = -1
+    endtime = starttime + timedelta(seconds=data.shape[1] / sr)
+
+    return data, sr, starttime, endtime, chan_names
+
+
+def ckeys_from_stapairs(pairs):
+
+    db_corr_keys = []
+
+    for pair in pairs:
+        # print(pair)
+        sta1, sta2 = pair.station1, pair.station2
+        for chan1, chan2 in itertools.product(sta1.channels, sta2.channels):
+            corr_key = f".{chan1}_.{chan2}"
+            db_corr_keys.append(corr_key)
+
+    return np.array(db_corr_keys)
+
+
+def fill_tables_sta_chan(stations, session, clear=True):
 
     if clear:
+        session.query(StationPair).delete()
+        session.query(Channel).delete()
         session.query(Station).delete()
+        session.commit()
 
-    rows = []
-    for i, sta in enumerate(stations):
-        chans = sorted([c.code for c in sta.channels])
-        db_station = Station(code=sta.code, channels=chans, location=sta.loc)
-        rows.append(db_station)
+    sta_rows = []
+    chan_rows = []
 
-    session.add_all(rows)
+    for sta in sorted(stations, key=lambda x: x.code):
+        chans = sorted(sta.channels, key=lambda x: x.code)
+        chan_names = []
+
+        for chan in chans:
+            chan_name = f"{sta.code}.{chan.code}"
+            chan_rows.append(Channel(name=chan_name, component=chan.code, station_name=sta.code, quality=1))
+
+            chan_names.append(chan_name)
+
+        db_station = Station(name=sta.code, channels=chan_names, location=sta.loc)
+        sta_rows.append(db_station)
+
+    session.add_all(sta_rows)
+    session.add_all(chan_rows)
     session.commit()
+
+
+# def fill_table_stations(stations, session, clear=True):
+
+#     if clear:
+#         session.query(Station).delete()
+
+#     rows = []
+#     for i, sta in enumerate(stations):
+#         chans = sorted([c.code for c in sta.channels])
+#         db_station = Station(code=sta.code, channels=chans, location=sta.loc)
+#         rows.append(db_station)
+
+#     session.add_all(rows)
+#     session.commit()
 
 
 def fill_table_station_pairs(stations, session, clear=True):
@@ -37,34 +100,39 @@ def fill_table_station_pairs(stations, session, clear=True):
     if clear:
         session.query(StationPair).delete()
 
-    stations_sorted = sorted(stations, key=lambda x: x.code)
+    stations_sorted = sorted(stations, key=lambda x: x.name)
 
     rows = []
     for sta1, sta2 in itertools.combinations(stations_sorted, 2):
         inter_dist = xutil.dist(sta1.location, sta2.location)
-        code = f"{sta1.code}_{sta2.code}"
-        pair = StationPair(code=code, dist=inter_dist)
+        name = f"{sta1.name}_{sta2.name}"
+        pair = StationPair(name=name, dist=inter_dist, station1_name=sta1.name, station2_name=sta2.name)
         rows.append(pair)
 
     session.add_all(rows)
     session.commit()
 
 
-def fill_table_xcorrs(dc, ckeys, starttime, session, rhandle):
+def fill_table_xcorrs(dc, nstack, ckeys, starttime, endtime, session, rhandle):
     """
     Fill database with cross-correlations
     """
     ncc, nsamp = dc.shape
     logger.info(f'Adding {ncc} correlations for {starttime} to database')
+    length_hours = (endtime - starttime).total_seconds() / 3600.
 
     pipe = rhandle.pipeline()
     rows = []
     for i, sig in enumerate(dc):
         # print(i)
         ckey = ckeys[i]
+        k1, k2 = ckey.split("_")
+        c1, c2 = k1[1:], k2[1:]
+        spair = f"{k1.split('.')[1]}_{k2.split('.')[1]}"
         dkey = f"{str(starttime)} {ckey}"
+
         pipe.set(dkey, xutil.array_to_bytes(sig))
-        rows.append(XCorr(start_time=starttime, corr_key=ckey, waveform_redis_key=dkey))
+        rows.append(XCorr(corr_key=ckey, channel1_name=c1, channel2_name=c2, stationpair_name=spair, start_time=starttime, length=length_hours, nstack=float(nstack[i]), waveform_redis_key=dkey))
 
     pipe.execute()  # add data to redis
     session.add_all(rows)  # add metadata rows to sql
