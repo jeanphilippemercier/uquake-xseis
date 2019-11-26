@@ -30,6 +30,13 @@ def linear_detrend_nan(y):
     return detrend_y
 
 
+def whiten_sig(sig, sr, whiten_freqs):
+    whiten_win = xutil.freq_window(whiten_freqs, len(sig), sr)
+    fsig = np.fft.rfft(sig)
+    fsig = whiten_win * xutil.phase(fsig)
+    return np.fft.irfft(sig)
+
+
 stations = settings.inventory.stations()
 sites = [int(sta.code) for sta in stations]
 base_url = settings.get('ims_base_url')
@@ -47,8 +54,8 @@ network_code = settings.NETWORK_CODE
 
 sr_raw = 6000.0
 dsr = 1000.0
-# whiten_freqs = np.array([60, 80, 320, 350])
-fband = [50, dsr / 2]
+whiten_freqs = np.array([40, 50, 380, 400])
+# fband = [50, 400]
 req_lag = timedelta(hours=-3)
 req_length = timedelta(minutes=10)
 decf = int(sr_raw / dsr)
@@ -78,11 +85,13 @@ while True:
 
     for i, tr in enumerate(stream):
         print(tr)
-        tr.data -= np.nanmean(tr.data)
-        tr.data = linear_detrend_nan(tr.data)
-        tr.data = np.nan_to_num(tr.data)
-        tr.filter('bandpass', freqmin=fband[0], freqmax=fband[1])
-        sig = tr.data[::decf]
+        sr = tr.stats.sampling_rate
+        sig = tr.data
+        sig = linear_detrend_nan(sig)
+        sig -= np.nanmean(sig)
+        sig = np.nan_to_num(sig)
+        sig = whiten_sig(sig, sr, whiten_freqs)
+        sig = sig[::decf]
         sig = np.sign(sig)
         sig[sig < 0] = 0
 

@@ -40,7 +40,61 @@ def linear_regression_zforce(xv, yv, weights):
     return yint, slope, residual
 
 
-def dvv(cc1, cc2, sr, wlen_sec, cfreqs, coda_start_sec, coda_end_sec, interp_factor=100, dvv_outlier_clip=None):
+def dvv_phase(cc1, cc2, sr, wlen_sec, freq_lims, coda_start_sec, coda_end_sec, step_factor=4):
+
+    assert(len(cc1) == len(cc2))
+    coeff = xutil.pearson_coeff(cc1, cc2)
+
+    wlen = int(wlen_sec * sr)
+    coda_start = int(coda_start_sec * sr)
+    coda_end = int(coda_end_sec * sr)
+
+    hl = len(cc1) // 2
+    iwin = [hl - coda_end, hl + coda_end]
+
+    stepsize = wlen // step_factor
+    slices = xutil.build_slice_inds(iwin[0], iwin[1], wlen, stepsize=stepsize)
+    dtt, errors = measure_phase_shift_slices(cc1, cc2, slices, sr, freq_lims).T
+
+    imax = dtt * sr
+
+    xv = np.mean(slices, axis=1) - hl
+    ikeep = np.arange(len(xv))
+
+    is_coda = np.abs(xv) > coda_start
+    n_outlier = 0
+    ikeep = np.where((is_coda))[0]
+
+    # xv_time = xv / sr
+    # coh = np.ones(len(errors))
+    # coh = 1 / errors
+    coh = errors ** 2
+
+    # if dvv_outlier_clip is not None:
+    #     is_outlier = np.abs(imax / xv) < (dvv_outlier_clip / 100)
+    #     ikeep = np.where((is_coda) & (is_outlier))[0]
+    #     n_outlier = int(100 * (1 - (np.sum(is_outlier) / len(is_outlier))))
+    #     # print(f"non-outlier: {np.sum(is_outlier) / len(is_outlier) * 100:.2f}%")
+    # else:
+    #     ikeep = np.where((is_coda))[0]
+
+    if n_outlier < 90:
+        regress = linear_regression_zforce(xv[ikeep], imax[ikeep], coh[ikeep])
+        # regress = linear_regression_zforce(xv_time[ikeep], dtt[ikeep], coh[ikeep] ** 2)
+    else:
+        regress = [0, 0, 0]
+
+    yint, slope, res = regress
+    dvv_percentage = -slope * 100
+
+    print(f"[dvv: {dvv_percentage:.4f}%] [corr_coeff: {coeff:.2f}] [outliers: {n_outlier}%] [res_fit: {res:.4f}]")
+
+    out = {"dvv": float(dvv_percentage), "regress": regress, "xvals": xv, "imax": imax, "coh": coh, "coda_win": [coda_start, coda_end], "ikeep": ikeep, "coeff": float(coeff), "n_outlier": float(n_outlier)}
+
+    return out
+
+
+def dvv(cc1, cc2, sr, wlen_sec, cfreqs, coda_start_sec, coda_end_sec, interp_factor=100, dvv_outlier_clip=None, step_factor=4):
 
     assert(len(cc1) == len(cc2))
 
@@ -53,7 +107,7 @@ def dvv(cc1, cc2, sr, wlen_sec, cfreqs, coda_start_sec, coda_end_sec, interp_fac
     hl = len(cc1) // 2
     iwin = [hl - coda_end, hl + coda_end]
 
-    stepsize = wlen // 4
+    stepsize = wlen // step_factor
     slices = xutil.build_slice_inds(iwin[0], iwin[1], wlen, stepsize=stepsize)
 
     fwins1, filt = windowed_fft(cc1, slices, sr, cfreqs)
@@ -87,6 +141,210 @@ def dvv(cc1, cc2, sr, wlen_sec, cfreqs, coda_start_sec, coda_end_sec, interp_fac
     out = {"dvv": float(dvv_percentage), "regress": regress, "xvals": xv, "imax": imax, "coh": coh, "coda_win": [coda_start, coda_end], "ikeep": ikeep, "coeff": float(coeff), "n_outlier": float(n_outlier)}
 
     return out
+
+
+def dvv_sym(cc1, cc2, sr, wlen_sec, cfreqs, coda_start_sec, coda_end_sec, interp_factor=100, dvv_outlier_clip=None, step_factor=4):
+
+    assert(len(cc1) == len(cc2))
+
+    coeff = xutil.pearson_coeff(cc1, cc2)
+
+    wlen = int(wlen_sec * sr)
+    coda_start = int(coda_start_sec * sr)
+    coda_end = int(coda_end_sec * sr)
+
+    iwin = [coda_start, coda_end]
+    # iwin = [0, coda_end]
+
+    stepsize = wlen // step_factor
+    slices = xutil.build_slice_inds(iwin[0], iwin[1], wlen, stepsize=stepsize)
+    xv = np.mean(slices, axis=1)
+
+    fwins1, filt = windowed_fft(cc1, slices, sr, cfreqs)
+    fwins2, filt = windowed_fft(cc2, slices, sr, cfreqs)
+    imax, coh = measure_shift_fwins_cc(fwins1, fwins2, interp_factor=interp_factor).T
+
+    ikeep = np.arange(len(xv))
+
+    is_coda = xv > coda_start
+    n_outlier = 0
+
+    if dvv_outlier_clip is not None:
+        is_outlier = np.abs(imax / xv) < (dvv_outlier_clip / 100)
+        ikeep = np.where((is_coda) & (is_outlier))[0]
+        n_outlier = int(100 * (1 - (np.sum(is_outlier) / len(is_outlier))))
+        # print(f"non-outlier: {np.sum(is_outlier) / len(is_outlier) * 100:.2f}%")
+    else:
+        ikeep = np.where((is_coda))[0]
+
+    if n_outlier < 90:
+        regress = linear_regression_zforce(xv[ikeep], imax[ikeep], coh[ikeep] ** 2)
+    else:
+        regress = [0, 0, 0]
+
+    yint, slope, res = regress
+    dvv_percentage = -slope * 100
+
+    print(f"[dvv: {dvv_percentage:.4f}%] [corr_coeff: {coeff:.2f}] [outliers: {n_outlier}%] [res_fit: {res:.4f}]")
+
+    out = {"dvv": float(dvv_percentage), "regress": regress, "xvals": xv, "imax": imax, "coh": coh, "coda_win": [coda_start, coda_end], "ikeep": ikeep, "coeff": float(coeff), "n_outlier": float(n_outlier)}
+
+    return out
+
+
+def windowed_fft(sig, slices, sr, corner_freqs, taper_percent=0.2):
+
+    # print("num slices", len(slices))
+    wlen_samp = slices[0][1] - slices[0][0]
+    pad = int(2 * wlen_samp)
+    taper = xutil.taper_window(wlen_samp, taper_percent)
+    freqs = np.fft.rfftfreq(pad, 1.0 / sr)
+    nfreq = len(freqs)
+
+#     fband = [5, 7, 18, 22]
+    filt = xutil.freq_window(corner_freqs, pad, sr)
+    # norm = 1.0 / xutil.energy(filt) * 2
+
+    fdat = np.zeros((len(slices), nfreq), dtype=np.complex64)
+
+    for i, sl in enumerate(slices):
+        fsig = np.fft.rfft(sig[sl[0]:sl[1]] * taper, n=pad)
+        fdat[i] = xutil.norm_energy_freq(filt * xutil.phase(fsig))
+        # fdat[i] = xutil.norm_energy_freq(fsig)
+
+    return fdat, filt
+
+
+def measure_shift_fwins_cc(fwins1, fwins2, interp_factor=1):
+
+    nwin, nfreq = fwins1.shape
+    pad = nfreq * 2 - 1
+
+    out = np.zeros((nwin, 2), dtype=np.float32)
+
+    for i, (w1, w2) in enumerate(zip(fwins1, fwins2)):
+        ccf = np.conj(w1) * w2
+        cc = np.fft.irfft(ccf, n=pad * interp_factor)
+        cc = np.roll(cc, len(cc) // 2)
+        imax = (np.argmax(cc) - len(cc) // 2) / interp_factor
+        out[i] = [imax, np.max(cc) * interp_factor]
+
+    return out
+
+
+def measure_phase_shift_slices(sig1, sig2, slices, sr, freq_lims, taper_percent=0.2):
+
+    # print("num slices", len(slices))
+    wlen_samp = slices[0][1] - slices[0][0]
+    # nslices = len(slices)
+    taper = xutil.taper_window(wlen_samp, taper_percent)
+
+    pad = int(2 * wlen_samp)
+    freqs = np.fft.rfftfreq(pad, 1.0 / sr)
+    fsr = 1.0 / (freqs[1] - freqs[0])
+
+    ix_fkeep = (np.array(freq_lims) * fsr + 0.5).astype(int)
+    fkeep = freqs[ix_fkeep[0]:ix_fkeep[1]] * 2 * np.pi
+    weights = np.ones(len(fkeep))
+
+    out = np.zeros((len(slices), 2), dtype=np.float32)
+
+    for i, sl in enumerate(slices):
+        fs1 = np.fft.rfft(sig1[sl[0]:sl[1]] * taper, n=pad)
+        fs2 = np.fft.rfft(sig2[sl[0]:sl[1]] * taper, n=pad)
+        # ccf = np.conj(xutil.phase(fs1)) * xutil.phase(fs2)
+        ccf = np.conj(fs1) * fs2
+        phi = np.angle(ccf)
+        phi_keep = phi[ix_fkeep[0]:ix_fkeep[1]]
+        regress = linear_regression_zforce(fkeep, phi_keep, weights=weights)
+        yint, slope, res = regress
+        # res = np.max(np.fft.irfft(ccf))
+        out[i] = [slope, res]
+
+    return out
+
+
+def measure_shift_fwins_phase(fwins1, fwins2, freqs, flim):
+
+    nwin, nfreq = fwins1.shape
+    fsr = 1.0 / (freqs[1] - freqs[0])
+    flims = np.array([80., 280.])
+    ixf = (flims * fsr + 0.5).astype(int)
+    yv = freqs[ixf[0]:ixf[1]] * 2 * np.pi
+    weights = np.ones(len(yv))
+
+    out = np.zeros((nwin, 2), dtype=np.float32)
+
+    for i, (w1, w2) in enumerate(zip(fwins1, fwins2)):
+        ccf = np.conj(w1) * w2
+        phi = np.angle(ccf)
+        phi_win = phi[ixf[0]:ixf[1]]
+        regress = linear_regression_zforce(yv, phi_win, weights=weights)
+        yint, slope, res = regress
+        out[i] = [slope, res]
+
+    return out
+
+
+def measure_shift_fwins_phase(fwins1, fwins2, freqs, flim):
+
+    nwin, nfreq = fwins1.shape
+    fsr = 1.0 / (freqs[1] - freqs[0])
+    flims = np.array([80., 280.])
+    ixf = (flims * fsr + 0.5).astype(int)
+    yv = freqs[ixf[0]:ixf[1]] * 2 * np.pi
+    weights = np.ones(len(yv))
+
+    out = np.zeros((nwin, 2), dtype=np.float32)
+
+    for i, (w1, w2) in enumerate(zip(fwins1, fwins2)):
+        ccf = np.conj(w1) * w2
+        phi = np.angle(ccf)
+        phi_win = phi[ixf[0]:ixf[1]]
+        regress = linear_regression_zforce(yv, phi_win, weights=weights)
+        yint, slope, res = regress
+        out[i] = [slope, res]
+
+    return out
+
+
+def plot_dvv_sym(vals, dvv_true=None):
+    import matplotlib.pyplot as plt
+
+    yint, slope, res = vals['regress']
+    xv = vals['xvals']
+    coh = vals['coh']
+    imax = vals['imax']
+    ikeep = vals['ikeep']
+    coeff = vals['coeff']
+    n_outlier = vals['n_outlier']
+    coda_start, coda_end = vals['coda_win']
+    dvv_meas = vals['dvv']
+
+    xv_fit = np.concatenate(([0], xv))
+    tfit = yint + slope * xv_fit
+    plt.plot(xv_fit, tfit, label=f'dvv_meas: {dvv_meas:.3f}')
+
+    if dvv_true is not None:
+        tfit2 = yint + (dvv_true / 100) * xv_fit
+        plt.plot(xv_fit, tfit2, label=f'dvv_true: {dvv_true:.3f}', color='green', linestyle='--')
+
+    plt.scatter(xv[ikeep], imax[ikeep], c=coh[ikeep])
+    plt.colorbar()
+    mask = np.ones_like(xv, bool)
+    mask[ikeep] = False
+    plt.scatter(xv[mask], imax[mask], c='red', alpha=0.2, label='ignored')
+
+    title = f"[dvv: {dvv_meas:.4f}%] [corr_coeff: {coeff:.2f}] [outliers: {n_outlier}%] [res_fit: {res:.4f}]"
+
+    plt.title(title)
+    plt.axvline(0, linestyle='--')
+    alpha = 0.5
+    # vel = 3200.
+    # direct = dist / vel * sr
+    plt.axvline(coda_start, linestyle='--', color='red', alpha=alpha)
+    plt.axvline(coda_end, linestyle='--', color='red', alpha=alpha)
+    plt.legend()
 
 
 def plot_dvv(vals, dvv_true=None):
@@ -249,46 +507,6 @@ def plot_tt_change(xv, imax, coh, yint, slope, res, ik):
     plt.title("tt_change: %.3f%% ss_res: %.3f " % (slope * 100, res))
 
 
-def windowed_fft(sig, slices, sr, corner_freqs, taper_percent=0.2):
-
-    # print("num slices", len(slices))
-    wlen_samp = slices[0][1] - slices[0][0]
-    pad = int(2 * wlen_samp)
-    taper = xutil.taper_window(wlen_samp, taper_percent)
-    freqs = np.fft.rfftfreq(pad, 1.0 / sr)
-    nfreq = len(freqs)
-
-#     fband = [5, 7, 18, 22]
-    filt = xutil.freq_window(corner_freqs, pad, sr)
-    # norm = 1.0 / xutil.energy(filt) * 2
-
-    fdat = np.zeros((len(slices), nfreq), dtype=np.complex64)
-
-    for i, sl in enumerate(slices):
-        fsig = np.fft.rfft(sig[sl[0]:sl[1]] * taper, n=pad)
-        fdat[i] = xutil.norm_energy_freq(filt * xutil.phase(fsig))
-        # fdat[i] = xutil.norm_energy_freq(fsig)
-
-    return fdat, filt
-
-
-def measure_shift_fwins_cc(fwins1, fwins2, interp_factor=1):
-
-    nwin, nfreq = fwins1.shape
-    pad = nfreq * 2 - 1
-
-    out = np.zeros((nwin, 2), dtype=np.float32)
-
-    for i, (w1, w2) in enumerate(zip(fwins1, fwins2)):
-        ccf = np.conj(w1) * w2
-        cc = np.fft.irfft(ccf, n=pad * interp_factor)
-        cc = np.roll(cc, len(cc) // 2)
-        imax = (np.argmax(cc) - len(cc) // 2) / interp_factor
-        out[i] = [imax, np.max(cc) * interp_factor]
-
-    return out
-
-
 def measure_shift_cc(sig1, sig2, interp_factor=1, taper_percent=0.2):
 
     wlen_samp = len(sig1)
@@ -418,6 +636,7 @@ def measure_phase_shift(sig1, sig2, sr, flims=None):
 
     if flims is None:
         flims = np.array([0, freqs[-1]])
+    print(f"freq_lims: {flims}")
 
     ixf = (flims * fsr + 0.5).astype(int)
     v = freqs[ixf[0]:ixf[1]] * 2 * np.pi

@@ -48,17 +48,23 @@ rhandle = redis.Redis(host='localhost', port=6379, db=0)
 
 reload(xutil)
 reload(xchange)
-coda_start_vel = 3500.
-coda_end_sec = 0.7
+vel_s = 3200
+coda_start_vel = 0.7 * vel_s
+coda_end_sec = 0.4
 dvv_wlen_sec = 0.05
-dvv_fband = np.array([60, 80, 250, 280])
+dvv_fband = np.array([60, 70, 230, 250])
 dvv_outlier_clip = 0.1
 # dvv_outlier_clip = None
 sr = 1000.0
 wlengths = coda_start_vel / dvv_fband
 nrecent = 200
-
-ckeys = np.unique(session.query(XCorr.corr_key).all())[::100]
+nrow_avg = 15
+# wild = f"%120.%.126%"
+wild = f"%118%"
+# ck_all = session.query(XCorr.corr_key).all()
+# ckeys = np.unique(session.query(XCorr.corr_key).all())[::100]
+ckeys = session.query(XCorr.corr_key).filter(XCorr.corr_key.like(wild)).all()
+ckeys = np.unique(ckeys)
 logger.info(f'{len(ckeys)} unique xcorr pairs in db')
 
 stats = []
@@ -73,7 +79,7 @@ for ckey in ckeys:
     logger.info(f'query returned {len(xcorrs)} xcorrs')
 
     xcorrs_dat = np.array([x.waveform for x in xcorrs])
-    xcorrs_dat = xutil.average_adjacent_rows(xcorrs_dat, nrow_avg=12)
+    xcorrs_dat = xutil.average_adjacent_rows(xcorrs_dat, nrow_avg=nrow_avg)
 
     dist = xcorrs[0].stationpair.dist
     dists.append(dist)
@@ -95,15 +101,44 @@ for ckey in ckeys:
 print(list(stats[0].keys()))
 
 
+key = 'dvv'
+# key = 'n_outlier'
 # key = 'coeff'
-key = 'n_outlier'
-# key = 'dvv'
-for pair in stats:
-    plt.plot(pair[key], alpha=0.2, marker='o')
+vals = np.array([pair[key] for pair in stats])
+vals[vals == 0] = np.nan
+# plt.plot(vals.T, alpha=0.2, marker='o')
+xv = np.linspace(0, vals.shape[1] * nrow_avg / 3, vals.shape[1])
+[plt.scatter(xv, y, alpha=0.1, color='black') for y in vals]
+plt.plot(xv, np.nanmean(vals, axis=0))
+plt.plot(xv, np.nanmedian(vals, axis=0))
 plt.ylabel(key)
-plt.xlabel("time (60 min intervals)")
+plt.xlabel("time (hours)")
+xplot.quicksave()
+# cumsum #########################
+
+key = 'dvv'
+vals = np.array([pair[key] for pair in stats])
+vals = np.cumsum(vals, axis=1)
+# vals[vals == 0] = np.nan
+# plt.plot(vals.T, alpha=0.2, marker='o')
+xv = np.linspace(0, vals.shape[1] * nrow_avg / 3, vals.shape[1])
+[plt.scatter(xv, y, alpha=0.1, color='black') for y in vals]
+plt.plot(xv, np.nanmean(vals, axis=0))
+plt.plot(xv, np.nanmedian(vals, axis=0))
+plt.ylabel(key)
+plt.xlabel("time (hours)")
 xplot.quicksave()
 
+
+#############################
+
+# vals = np.array([pair[key] for pair in stats])
+# vals[vals == 0] = np.nan
+# xplot.im(vals, norm=False)
+
+# plt.hist(vals.flatten(), bins=10)
+# plt.hist(vals[:, 0])
+# plt.hist(vals[:, 1])
 
 ############################################
 
@@ -114,11 +149,12 @@ xplot.quicksave()
 vals = np.array([np.mean(p['coeff']) for p in stats])
 imax = np.argmax(vals)
 ckey = ckeys[imax]
+nrow_avg = 12
 
 xcorrs = session.query(XCorr).filter_by(corr_key=ckey).order_by(XCorr.start_time.desc()).limit(nrecent).all()[::-1]
 flow.xcorr_load_waveforms(xcorrs, rhandle)
 xcorrs_dat_raw = np.array([x.waveform for x in xcorrs])
-xcorrs_dat = xutil.average_adjacent_rows(xcorrs_dat_raw, nrow_avg=12)
+xcorrs_dat = xutil.average_adjacent_rows(xcorrs_dat_raw, nrow_avg=nrow_avg)
 
 dist = xcorrs[0].stationpair.dist
 coda_start_sec = dist / coda_start_vel
@@ -173,6 +209,27 @@ xplot.HookImageMax(im)
 
 xplot.im_freq(dat, sr)
 #####################################################
+
+
+stations = session.query(Station).filter(Station.name != '134').all()
+locs = np.array([x.location for x in stations])
+lbls = np.array([x.name for x in stations])
+# plt.plot(vals)
+x, y, z = locs.T
+
+fig = plt.figure(figsize=(12, 9), facecolor='white')
+ax = fig.add_subplot(111, projection='3d')
+x, y, z = locs.T
+# ax.scatter(x, y, z, c='green', s=vals * 100)
+im = ax.scatter(x, y, z, c='green', s=50, alpha=0.5)
+for i, lbl in enumerate(lbls):
+    ax.text(x[i], y[i], z[i], lbl)
+ax.set_xlabel('X (m)')
+ax.set_ylabel('Y (m)')
+ax.set_zlabel('Z (m)')
+plt.colorbar(im)
+xplot.set_axes_equal(ax)
+plt.tight_layout()
 
 
 ###################################

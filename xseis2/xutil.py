@@ -17,6 +17,40 @@ import io
 # from scipy.signal import sosfilt, zpk2sos, iirfilter
 
 
+def symmetric(data):
+    """Create symmetric signal."""
+    if data.ndim == 1:
+        split = split_causals(data)
+        split[0][0] = 0
+        sym = np.sum(split, axis=0) / 2.
+    elif data.ndim == 2:
+        sym = (acaus2d(data) + caus2d(data)) / 2
+
+    return sym
+
+
+def split_causals(sig, overlap=0):
+    """Split signals into causal/acausal."""
+    length = len(sig)
+    lh = length // 2
+    pos_start = lh - overlap
+    neg_end = lh + overlap
+
+    if length % 2 != 0:
+        neg_end += 1
+
+    return np.array([sig[pos_start:], sig[:neg_end][::-1]])
+
+
+def acaus2d(data):
+    return np.fliplr(data[:, :data.shape[1] // 2])
+
+
+def caus2d(data):
+    return data[:, data.shape[1] // 2:]
+
+
+
 def average_adjacent_rows(dat, nrow_avg):
     nrow, ncol = dat.shape
     nrow_new = nrow // nrow_avg
@@ -674,10 +708,15 @@ def xcorr_ckeys(dat, ckeys, norm=True):
         k1, k2 = ckey
         stack[j] = np.fft.irfft(np.conj(fdat[k1]) * fdat[k2])
 
-    # stack = np.fft.irfft(fstack)
     stack = np.roll(stack, padlen // 2, axis=1)
 
     return stack
+
+
+def keeplag(dat, nkeep):
+    nsamp = dat.shape[-1]
+    hl = int(nsamp // 2)
+    return dat[:, hl - nkeep:hl + nkeep]
 
 
 def energy(sig, axis=None):

@@ -90,12 +90,28 @@ whiten_freqs = fband_sig
 
 dvv_outlier_clip = 0.1
 
-reload(xutil)
-reload(xchange)
 vals = xchange.dvv(sig1, sig2, sr, dvv_wlen_sec, whiten_freqs, coda_start_sec, coda_end_sec, dvv_outlier_clip=dvv_outlier_clip)
+# vals['xvals'] = np.concatenate(([0], vals['xvals']))
+xchange.plot_dvv(vals, dvv_true=tt_change_percent)
+
+# sym1 = xutil.split_causals(sig1)
+# plt.plot(sym1.T)
+
+reload(xutil)
+# sym1 = xutil.split_causals(sig1)[0]
+# sym2 = xutil.split_causals(sig2)[0]
+sym1 = xutil.symmetric(sig1)
+sym2 = xutil.symmetric(sig2)
+# plt.plot(sym1.T)
+# reload(xchange)
 
 reload(xchange)
-xchange.plot_dvv(vals, dvv_true=tt_change_percent)
-xplot.quicksave()
+
+vals = xchange.dvv_sym(sym1, sym2, sr, dvv_wlen_sec, whiten_freqs, coda_start_sec, coda_end_sec, dvv_outlier_clip=dvv_outlier_clip, step_factor=10)
+# vals = xchange.dvv(sig1, sig2, sr, dvv_wlen_sec, whiten_freqs, coda_start_sec, coda_end_sec, dvv_outlier_clip=dvv_outlier_clip)
+# vals['xvals'] = np.concatenate(([0], vals['xvals']))
+xchange.plot_dvv_sym(vals, dvv_true=tt_change_percent)
+
+# xplot.quicksave()
 
 
