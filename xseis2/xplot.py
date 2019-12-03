@@ -13,9 +13,29 @@ import datetime
 from scipy import fftpack
 from scipy.fftpack import fft, ifft, rfft, fftfreq
 from xseis2 import xutil
+from matplotlib.widgets import LassoSelector
+from matplotlib.path import Path
 
 from matplotlib.pyplot import rcParams
 rcParams['figure.figsize'] = 11, 8
+
+
+def axvline(*args, **kwargs):
+    defs = {'linestyle': '--', 'alpha': 0.5, "color": 'red'}
+    for k, v in defs.items():
+        if k not in kwargs:
+            kwargs[k] = v
+
+    plt.axvline(*args, **kwargs)
+
+
+def axhline(*args, **kwargs):
+    defs = {'linestyle': '--', 'alpha': 0.5, "color": 'red'}
+    for k, v in defs.items():
+        if k not in kwargs:
+            kwargs[k] = v
+
+    plt.axhline(*args, **kwargs)
 
 
 def quicksave(fig=None, savedir=None, prefix='py', dpi=100):
@@ -131,10 +151,18 @@ def ccf(d, sr=None):
 
 def v2color(vals):
 
-    cnorm  = plt.Normalize(vmin=np.nanmin(vals), vmax=np.nanmax(vals))
+    cnorm = plt.Normalize(vmin=np.nanmin(vals), vmax=np.nanmax(vals))
     cmap = plt.cm.ScalarMappable(norm=cnorm, cmap=plt.get_cmap('viridis'))
     clrs = [cmap.to_rgba(v) for v in vals]
     return clrs
+
+
+def build_cmap(vals):
+
+    cnorm = plt.Normalize(vmin=np.nanmin(vals), vmax=np.nanmax(vals))
+    cmap = plt.cm.ScalarMappable(norm=cnorm, cmap=plt.get_cmap('viridis'))
+    clrs = [cmap.to_rgba(v) for v in vals]
+    return clrs, cmap
 
 
 def stations(locs, lvals=None, ckeys=None, cvals=None, alpha=0.3, lstep=100, pkeys=None, plocs=None):
@@ -195,11 +223,11 @@ def im_freq(d, sr, norm=False, xlims=None):
     plt.show()
 
 
-def im(d, norm=True, savedir=None, tkey='im_raw', cmap='viridis', aspect='auto', extent=None, locs=None, labels=None, title=None):
+def im(d, norm=True, savedir=None, tkey='im_raw', cmap='viridis', aspect='auto', extent=None, locs=None, labels=None, times=None, title=None):
 
     fig = plt.figure(figsize=(12, 8))
-    # if times is not None:
-    #   extent = [times[0], times[-1], 0, d.shape[0]]
+    if times is not None:
+        extent = [times[0], times[-1], 0, d.shape[0]]
 
     if norm is True:
         dtmp = d / np.max(np.abs(d), axis=1)[:, np.newaxis]
@@ -257,24 +285,28 @@ def freq_compare(sigs, sr, xlim=None):
     plt.show()
 
 
-def freq(sig, sr, xlim=None):
+def freq(sig, sr, xlim=None, zpad=True):
 
-    times = np.linspace(0, len(sig) / sr, len(sig)) * 1000.
     plt.subplot(211)
-    # plt.plot(sig, marker='o', alpha=1, markersize=3)
+    times = np.linspace(0, len(sig) / sr, len(sig)) * 1000.
     plt.plot(times, sig, marker='o', alpha=1, markersize=0)
     plt.xlabel('Time (ms)')
+
     plt.subplot(212)
-    f = fftpack.fft(sig)
-    freq = fftpack.fftfreq(len(f), d=1. / sr)
-    # freq = np.fft.fftshift(freq)
-    plt.plot(np.fft.fftshift(freq), np.fft.fftshift(np.abs(f)), marker='o', alpha=1, markersize=0)
+    padlen = len(sig)
+    if zpad:
+        padlen *= 2
+
+    fsig = np.fft.rfft(sig, n=padlen)
+    freqs = np.fft.rfftfreq(padlen, 1.0 / sr)
+
+    plt.plot(freqs, np.abs(fsig), marker='o', alpha=1, markersize=0)
     plt.ylabel('abs(f)')
 
-    if xlim is not None:
-        plt.xlim(xlim)
-    else:
-        plt.xlim([0, sr / 2.])
+    # if xlim is not None:
+    #     plt.xlim(xlim)
+    # else:
+    #     plt.xlim([0, sr / 2.])
     plt.xlabel('Freq (Hz)')
 
 
@@ -473,3 +505,52 @@ class HookImageMax:
 
         self.dline.figure.canvas.draw()
 
+
+class HookLasso:
+    def __init__(self, collection):
+
+        self.collection = collection
+        self.dline = collection
+
+        self.ax = collection.axes
+        self.alpha_other = 0.3
+
+        self.xys = collection.get_offsets()
+        self.Npts = len(self.xys)
+
+        self.cid = self.dline.figure.canvas.mpl_connect('key_press_event', self)
+        self.canvas = self.dline.figure.canvas
+
+        self.lasso = LassoSelector(self.ax, onselect=self.onselect)
+        self.ind = []
+
+        # Ensure that we have separate colors for each object
+        self.fc = collection.get_facecolors()
+        if len(self.fc) == 0:
+            raise ValueError('Collection must have a facecolor')
+        elif len(self.fc) == 1:
+            self.fc = np.tile(self.fc, (self.Npts, 1))
+
+    def __call__(self, event):
+
+        if event.key == 'enter':
+            print("Selected inds:")
+            # print(self.xys[self.ind])
+            print(self.ind)
+            self.disconnect()
+
+        self.dline.figure.canvas.draw()
+
+    def onselect(self, verts):
+        path = Path(verts)
+        self.ind = np.nonzero(path.contains_points(self.xys))[0]
+        self.fc[:, -1] = self.alpha_other
+        self.fc[self.ind, -1] = 1
+        self.collection.set_facecolors(self.fc)
+        self.canvas.draw_idle()
+
+    def disconnect(self):
+        self.lasso.disconnect_events()
+        self.fc[:, -1] = 1
+        self.collection.set_facecolors(self.fc)
+        self.canvas.draw_idle()

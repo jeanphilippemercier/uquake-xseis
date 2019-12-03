@@ -113,7 +113,7 @@ def fill_table_station_pairs(stations, session, clear=True):
     session.commit()
 
 
-def fill_table_xcorrs(dc, nstack, ckeys, starttime, endtime, session, rhandle):
+def fill_table_xcorrs(dc, nstack, ckeys, starttime, endtime, session, rhandle, nstack_min_percent=0):
     """
     Fill database with cross-correlations
     """
@@ -124,6 +124,8 @@ def fill_table_xcorrs(dc, nstack, ckeys, starttime, endtime, session, rhandle):
     pipe = rhandle.pipeline()
     rows = []
     for i, sig in enumerate(dc):
+        if nstack[i] < nstack_min_percent:
+            continue
         # print(i)
         ckey = ckeys[i]
         k1, k2 = ckey.split("_")

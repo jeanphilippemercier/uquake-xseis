@@ -33,10 +33,10 @@ db_string = "postgres://postgres:postgres@localhost"
 db = create_engine(db_string)
 print(db.table_names())
 session = sessionmaker(bind=db)()
-# flow.sql_drop_tables(db)
+flow.sql_drop_tables(db)
+session.commit()
 # session.query(XCorr).delete()
 # session.query(VelChange).delete()
-# session.commit()
 # session.close()
 Base.metadata.create_all(db)
 session.commit()
@@ -44,10 +44,10 @@ session.commit()
 ##################################
 logger.info('Connect to redis database')
 rhandle = redis.Redis(host='localhost', port=6379, db=0)
-# rhandle.flushall()
+rhandle.flushall()
 ###################################
 
-dsr = 1000.0
+# dsr = 2000.0
 # PARAMS - config
 whiten_freqs = np.array([60, 80, 300, 320])
 cc_wlen_sec = 10.0
@@ -56,25 +56,39 @@ stepsize_sec = cc_wlen_sec
 keeplag_sec = 1.0
 stacklen_sec = 100.0
 min_pair_dist = 50
-max_pair_dist = 400
+max_pair_dist = 800
+nstack_min_percent = 80
 onebit = False
 
 ####################################
 
-# with open(os.path.join(os.environ['SPP_COMMON'], "stations.pickle"), 'rb') as f:
-#     stations_pkl = pickle.load(f)
+with open(os.path.join(os.environ['SPP_COMMON'], "stations.pickle"), 'rb') as f:
+    stations_pkl = pickle.load(f)
 
-# flow.fill_tables_sta_chan(stations_pkl, session)
-# stations = session.query(Station).all()
-# flow.fill_table_station_pairs(stations, session)
+flow.fill_tables_sta_chan(stations_pkl, session)
+stations = session.query(Station).all()
+flow.fill_table_station_pairs(stations, session)
 
 ###############################
+
+
+def ckeys_remove_chans(ckeys, names):
+    ikeep = []
+    for i, ck in enumerate(ckeys):
+        c1, c2 = ck.split('_')
+        if c1 in names or c2 in names:
+            continue
+        ikeep.append(i)
+
+    return ckeys[np.array(ikeep)]
+
 
 pairs = session.query(StationPair).filter(StationPair.dist.between(min_pair_dist, max_pair_dist)).filter().all()
 
 db_corr_keys = flow.ckeys_from_stapairs(pairs)
-
+db_corr_keys = ckeys_remove_chans(db_corr_keys, xchange.ot_bad_chans())
 logger.info(f'{len(db_corr_keys)} potential corr keys')
+
 
 ###################################
 
@@ -93,7 +107,7 @@ reload(xutil)
 reload(flow)
 # session.query(XCorr).delete()
 
-for i, fname in enumerate(data_fles[:]):
+for i, fname in enumerate(data_fles[:-1]):
     print(f"processing {i} / {len(data_fles)}")
 
     basename = os.path.basename(fname)
@@ -113,16 +127,36 @@ for i, fname in enumerate(data_fles[:]):
 
     dc, nstack = xchange.xcorr_ckeys_stack_slices(data, sr, ckeys_ix, cc_wlen_sec, keeplag_sec, stepsize_sec=stepsize_sec, whiten_freqs=whiten_freqs, onebit=onebit)
 
-    flow.fill_table_xcorrs(dc, nstack, ckeys, starttime, endtime, session, rhandle)
+    flow.fill_table_xcorrs(dc, nstack, ckeys, starttime, endtime, session, rhandle, nstack_min_percent=nstack_min_percent)
 
     session.add(DataFile(name=basename, status=True))
     session.commit()
 
 ###################################################
 
+# fname = data_fles[0]
+# data, sr, starttime, endtime, chan_names = flow.load_npz_continuous(fname)
+
+# plt.plot(data[10])
+# xplot.freq(data[10][:100000], sr)
 
 
+# def whiten_sig(sig, sr, whiten_freqs):
+#     whiten_win = xutil.freq_window(whiten_freqs, len(sig), sr)
+#     fsig = np.fft.rfft(sig)
+#     fsig = whiten_win * xutil.phase(fsig)
+#     return np.fft.irfft(fsig)
 
+
+# whiten_freqs = np.array([40, 50, 380, 400])
+
+# sig = data[0]
+# # sig = whiten_sig(sig, sr, whiten_freqs)
+# whiten_win = xutil.freq_window(whiten_freqs, len(sig), sr)
+# fsig = np.fft.rfft(sig)
+# fsig = whiten_win * xutil.phase(fsig)
+# sig = np.fft.irfft(fsig)
+# xplot.freq(sig, sr)
 
 
 

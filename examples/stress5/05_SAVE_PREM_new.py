@@ -7,42 +7,26 @@ from datetime import datetime, timedelta
 from xseis2 import xutil
 from glob import glob
 from pytz import utc
-# starttime
 
 import time
 from microquake.core.settings import settings
 from microquake.core.stream import Trace, Stream
 
-from microquake.clients.ims import web_client
+# from microquake.clients.ims import web_client
+from xseis2 import web_client
 
 from obspy import UTCDateTime
-
-from scipy.stats import linregress
 # from microquake.core.helpers.time import get_time_zone
-# import json
-
-
-def linear_detrend_nan(y):
-    x = np.arange(len(y))
-    not_nan_ind = ~np.isnan(y)
-    m, b, r_val, p_val, std_err = linregress(x[not_nan_ind], y[not_nan_ind])
-    detrend_y = y - (m * x + b)
-    return detrend_y
-
-
-def whiten_sig(sig, sr, whiten_freqs):
-    whiten_win = xutil.freq_window(whiten_freqs, len(sig), sr)
-    fsig = np.fft.rfft(sig)
-    fsig = whiten_win * xutil.phase(fsig)
-    return np.fft.irfft(fsig)
 
 
 stations = settings.inventory.stations()
-sites = [int(sta.code) for sta in stations]
+# sites = [int(sta.code) for sta in stations]
 base_url = settings.get('ims_base_url')
 api_base_url = settings.get('api_base_url')
 inventory = settings.inventory
 network_code = settings.NETWORK_CODE
+
+sites = [18, 20, 22, 24, 26, 28, 30, 32, 41, 44, 46, 48, 50, 52, 54, 56, 58, 63, 65, 67, 69, 71, 79, 81, 90, 104, 106, 108, 110, 112, 115, 117, 119, 121, 126]
 
 # import pickle
 # fname = os.path.join(os.environ['SPP_COMMON'], "stations.pickle")
@@ -53,8 +37,8 @@ network_code = settings.NETWORK_CODE
 #############################
 
 sr_raw = 6000.0
-dsr = 1000.0
-whiten_freqs = np.array([40, 50, 380, 400])
+dsr = 2000.0
+whiten_freqs = np.array([40, 50, 390, 400])
 # fband = [50, 400]
 req_lag = timedelta(hours=-3)
 req_length = timedelta(minutes=10)
@@ -67,10 +51,9 @@ while True:
     req_start_time = UTCDateTime(curtime + req_lag)
     req_end_time = UTCDateTime(req_start_time + req_length)
 
-    stream = web_client.get_continuous(base_url, req_start_time, req_end_time, sites, utc, network=network_code)
+    stream = web_client.get_continuous(base_url, req_start_time, req_end_time, sites, utc, network=network_code, format='binary')
 
     if stream is None:
-        time.sleep(30)
         continue
     # sta_ids = np.array([sta.code for sta in stations])[::5]
     # stream = flow.get_continuous_fake(req_start_time, req_end_time, sta_ids, sr=sr_raw)
@@ -87,10 +70,14 @@ while True:
         print(tr)
         sr = tr.stats.sampling_rate
         sig = tr.data
-        sig = linear_detrend_nan(sig)
+        ixnan = np.where(np.isnan(sig))[0]
         sig -= np.nanmean(sig)
-        sig = np.nan_to_num(sig)
-        sig = whiten_sig(sig, sr, whiten_freqs)
+        sig = xutil.linear_detrend_nan(sig)
+        sig[ixnan] = 0
+        # sig = xutil.bandpass(sig, fband, sr)
+        sig = xutil.whiten_sig(sig, sr, whiten_freqs, pad_multiple=1000)
+        sig[ixnan] = 0
+        # sig = np.sign(tr.data[::decf])
         sig = sig[::decf]
         sig = np.sign(sig)
         sig[sig < 0] = 0
@@ -124,3 +111,41 @@ while True:
 # st2.write(fname)
 
 
+# from microquake.core.helpers.timescale_db import get_continuous_data
+# import time
+
+# sr_raw = 6000.0
+# dsr = 2000.0
+# whiten_freqs = np.array([40, 50, 380, 400])
+# # fband = [50, 400]
+# req_lag = timedelta(hours=-3)
+# # req_length = timedelta(minutes=10)
+# req_length = timedelta(minutes=1)
+# decf = int(sr_raw / dsr)
+
+
+# curtime = datetime.utcnow()
+# curtime.replace(tzinfo=utc)
+# req_start_time = UTCDateTime(curtime + req_lag)
+# req_end_time = UTCDateTime(req_start_time + req_length)
+
+# t0 = time.time()
+
+# st = get_continuous_data(req_start_time, req_end_time)
+
+# elapsed = time.time() - t0
+# print('elapsed: %.2f sec' % elapsed)
+
+# [tr.stats.station for tr in st]
+# [len(tr.data) / 6000 for tr in st]
+
+# sensor_id = '1'
+# st = get_continuous_data(starttime, endtime, sensor_id)
+
+
+# curtime = datetime.utcnow()
+# curtime.replace(tzinfo=utc)
+# endtime = curtime + timedelta(minutes=-60)
+# starttime = endtime - timedelta(minutes=5)
+# print(starttime, endtime)
+# st = get_continuous_data(starttime, endtime)

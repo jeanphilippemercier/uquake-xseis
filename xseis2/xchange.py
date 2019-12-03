@@ -15,14 +15,38 @@ from loguru import logger
 from numba import njit
 
 
+def ot_keep_sites():
+
+    sites = np.array([18,  20,  22,  24,  26,  28,  30,  32,  41,  44,  46,  48,  50,
+                52,  54,  56,  58,  63,  65,  67,  69,  71,  79,  81,  83,  86,
+                88,  90, 104, 106, 108, 110, 112, 115, 117, 119, 121, 126, 131])
+    return sites
+
+
+def ot_best_pairs():
+    return np.array(['.110.X_.41.X', '.110.Y_.41.X', '.110.Y_.41.Y', '.110.Z_.41.X',
+       '.110.Z_.41.Y', '.121.X_.41.X', '.121.X_.41.Y', '.121.Y_.41.X',
+       '.121.Y_.41.Y', '.121.Z_.41.X', '.121.Z_.41.Y', '.24.X_.41.X',
+       '.24.X_.41.Y', '.24.Y_.41.X', '.24.Y_.41.Y', '.117.X_.119.X', '.117.X_.119.Y', '.117.Z_.119.Y', '.117.Z_.119.Z', '.50.X_.52.Y', '.50.X_.52.Z', '.50.Y_.52.Y', '.50.Y_.52.Z'],
+      dtype='<U13')
+
+
+def ot_bad_chans():
+     return np.array(['.131.X', '.131.Y', '.131.Z', '.56.Y', '.67.Y', '.83.X', '.86.X',
+       '.86.Y', '.86.Z', '.88.X', '.88.Y', '.88.Z', '.90.X', '.90.Z'],
+      dtype='<U6')
+
+
 def mock_corrs_dvv(nsamp, sr, tt_change_percent, fband_sig, fband_noise, noise_scale):
 
-    sig1 = xutil.noise1d(nsamp, fband_sig, sr, scale=1, taplen=0)
+    keeplag = nsamp // 2
+    sig1 = xutil.noise1d(keeplag, fband_sig, sr, scale=1, taplen=0)
     sig2 = stretch(sig1, sr, tt_change_percent)
 
-    sig1 = np.concatenate((sig1[::-1][1:], sig1))
-    sig2 = np.concatenate((sig2[::-1][1:], sig2))
-    nsamp = len(sig1)
+    # sig1 = np.concatenate((sig1[::-1][1:], sig1))
+    # sig2 = np.concatenate((sig2[::-1][1:], sig2))
+    sig1 = np.concatenate((sig1[::-1], sig1))
+    sig2 = np.concatenate((sig2[::-1], sig2))
     noise1 = xutil.noise1d(nsamp, fband_noise, sr, scale=noise_scale, taplen=0)
     noise2 = xutil.noise1d(nsamp, fband_noise, sr, scale=noise_scale, taplen=0)
     sig1 += noise1
@@ -35,12 +59,122 @@ def linear_regression_zforce(xv, yv, weights):
     # print(out)
     slope = out[0][0]
     yint = 0
-    residual = out[1][0]
+    residual = out[1][0] / len(xv)
+    # residual = out[1][0]
 
     return yint, slope, residual
 
 
-def dvv_phase(cc1, cc2, sr, wlen_sec, freq_lims, coda_start_sec, coda_end_sec, step_factor=4):
+def dvv_phase(cc1, cc2, sr, wlen_sec, freq_lims, coda_start_sec, coda_end_sec, step_factor=4, nwin_welch=4):
+
+    cclen = len(cc1)
+    assert(cclen == len(cc2))
+
+    times = xutil.xcorr_lagtimes(cclen, sr)
+    icoda = np.where((np.abs(times) < coda_end_sec) & (np.abs(times) > coda_start_sec))
+
+    coeff = xutil.pearson_coeff(cc1[icoda], cc2[icoda])
+
+    wlen = int(wlen_sec * sr)
+    coda_start = int(coda_start_sec * sr)
+    coda_end = int(coda_end_sec * sr)
+    hl = len(cc1) // 2
+    iwin = [hl - coda_end, hl + coda_end]
+
+    stepsize = wlen // step_factor
+    slices = xutil.build_slice_inds(iwin[0], iwin[1], wlen, stepsize=stepsize)
+    fdat1, freqs = fft_slices(cc1, slices, sr)
+    fdat2, _ = fft_slices(cc2, slices, sr)
+    nwin, nfreq = fdat1.shape
+
+    ix_fkeep = np.where((freqs > freq_lims[0]) & (freqs < freq_lims[1]))[0]
+    fkeep = freqs[ix_fkeep] * 2 * np.pi
+
+    welch_groups = xutil.build_welch_wins(0, nwin, nwin_welch, stepsize=1)
+
+    n_measure = len(welch_groups)
+    out = np.zeros((n_measure, 2), dtype=np.float32)
+    # breakpoint()
+
+    cohs = []
+    mcoh = []
+    for i, (i0, imid, i1) in enumerate(welch_groups):
+
+        # coh
+        fg1 = fdat1[i0:i1]
+        fg2 = fdat2[i0:i1]
+        gxy = np.mean(np.conj(fg1) * fg2, axis=0)
+        gxx = np.mean(np.conj(fg1) * fg1, axis=0)
+        gyy = np.mean(np.conj(fg2) * fg2, axis=0)
+        coh = np.abs(gxy) ** 2 / (np.abs(gxx * gyy))
+        mcoh.append(np.mean(coh[ix_fkeep]))
+        # weights = coh[ix_fkeep] ** 2
+        weights = 1.0 / (1.0 / (coh[ix_fkeep] ** 2) - 1.0)
+        weights /= np.sum(weights)
+        cohs.append(coh)
+        # cohs.append(weights)
+
+        # dvv
+        ccf = np.conj(fdat1[imid]) * fdat2[imid]
+        phi = np.angle(ccf)
+        phi_keep = phi[ix_fkeep]
+        regress = linear_regression_zforce(fkeep, phi_keep, weights=weights)
+        yint, slope, res = regress
+        # res = np.sum((phi_keep - slope * fkeep) ** 2) / (np.size(fkeep) - 1)
+        res = np.sum((np.sqrt(weights) * (phi_keep - slope * fkeep)) ** 2)
+        out[i] = [slope, res]
+
+        # m=slope, phi=phi_keep, v=fkeep 2pi, w=weights
+        # e = np.sum(np.abs(phi_keep - slope * fkeep)) / (np.size(fkeep) - 1)
+        # s2x2 = np.sum(fkeep ** 2 * weights ** 2)
+        # sx2 = np.sum(weights * fkeep ** 2)
+        # e = np.sqrt(e * s2x2 / sx2 ** 2)
+
+        # out[i] = [slope, res / len(fkeep)]
+        # out[i] = [slope, res]
+
+    cohs = np.array(cohs)
+    mcoh = np.array(mcoh)
+    dtt, errors = out.T
+    # coh = np.mean(cohs, axis=1)
+    res = errors.copy()
+    min_res = 0
+    res[res < min_res] = min_res
+    weights = 1 / res
+    # weights = np.ones(len(errors))
+
+    imax = dtt * sr
+
+    # coh = 1 + 1 / (errors + 0.1)
+    # coh = 0.5 + 1 / (errors + 0.05)
+    # coh = errors
+    # w = 1.0 / (1.0 / (coh[index_range] ** 2) - 1.0)
+        # w[coh[index_range] >= 0.99] = 1.0 / (1.0 / 0.9801 - 1.0)
+    # coh = np.ones(len(imax))
+
+    xv = np.mean(slices[welch_groups[:, 1]], axis=1) - hl
+
+    ikeep = np.arange(len(xv))
+    is_coda = np.abs(xv) > coda_start
+    n_outlier = 0
+    ikeep = np.where((is_coda))[0]
+
+    if n_outlier < 90:
+        regress = linear_regression_zforce(xv[ikeep], imax[ikeep], weights[ikeep])
+    else:
+        regress = [0, 0, 0]
+
+    yint, slope, res = regress
+    dvv_percentage = -slope * 100
+
+    print(f"[dvv: {dvv_percentage:.4f}%] [corr_coeff: {coeff:.2f}] [outliers: {n_outlier}%] [res_fit: {res:.4f}]")
+
+    out = {"dvv": float(dvv_percentage), "regress": regress, "xvals": xv, "imax": imax, "coh": weights, "coda_win": [coda_start, coda_end], "ikeep": ikeep, "coeff": float(coeff), "n_outlier": float(n_outlier), "cohs": cohs, "residuals": errors, "freqs": freqs, 'sr': sr, 'mcoh': mcoh}
+
+    return out
+
+
+def dvv_phase_no_weights(cc1, cc2, sr, wlen_sec, freq_lims, coda_start_sec, coda_end_sec, step_factor=4):
 
     assert(len(cc1) == len(cc2))
     coeff = xutil.pearson_coeff(cc1, cc2)
@@ -67,8 +201,8 @@ def dvv_phase(cc1, cc2, sr, wlen_sec, freq_lims, coda_start_sec, coda_end_sec, s
 
     # xv_time = xv / sr
     # coh = np.ones(len(errors))
-    # coh = 1 / errors
-    coh = errors ** 2
+    coh = 1 / (errors + 0.5)
+    # coh = errors ** 2
 
     # if dvv_outlier_clip is not None:
     #     is_outlier = np.abs(imax / xv) < (dvv_outlier_clip / 100)
@@ -89,7 +223,7 @@ def dvv_phase(cc1, cc2, sr, wlen_sec, freq_lims, coda_start_sec, coda_end_sec, s
 
     print(f"[dvv: {dvv_percentage:.4f}%] [corr_coeff: {coeff:.2f}] [outliers: {n_outlier}%] [res_fit: {res:.4f}]")
 
-    out = {"dvv": float(dvv_percentage), "regress": regress, "xvals": xv, "imax": imax, "coh": coh, "coda_win": [coda_start, coda_end], "ikeep": ikeep, "coeff": float(coeff), "n_outlier": float(n_outlier)}
+    out = {"dvv": float(dvv_percentage), "regress": regress, "xvals": xv, "imax": imax, "coh": coh, "coda_win": [coda_start, coda_end], "ikeep": ikeep, "coeff": float(coeff), "n_outlier": float(n_outlier), "errors": errors}
 
     return out
 
@@ -192,6 +326,24 @@ def dvv_sym(cc1, cc2, sr, wlen_sec, cfreqs, coda_start_sec, coda_end_sec, interp
     return out
 
 
+def fft_slices(sig, slices, sr, taper_percent=0.2):
+
+    # print("num slices", len(slices))
+    wlen_samp = slices[0][1] - slices[0][0]
+    pad = int(2 * wlen_samp)
+    taper = xutil.taper_window(wlen_samp, taper_percent)
+    freqs = np.fft.rfftfreq(pad, 1.0 / sr)
+    nfreq = len(freqs)
+
+    fdat = np.zeros((len(slices), nfreq), dtype=np.complex64)
+
+    for i, sl in enumerate(slices):
+        fsig = np.fft.rfft(sig[sl[0]:sl[1]] * taper, n=pad)
+        fdat[i] = fsig
+
+    return fdat, freqs
+
+
 def windowed_fft(sig, slices, sr, corner_freqs, taper_percent=0.2):
 
     # print("num slices", len(slices))
@@ -264,11 +416,10 @@ def measure_phase_shift_slices(sig1, sig2, slices, sr, freq_lims, taper_percent=
     return out
 
 
-def measure_shift_fwins_phase(fwins1, fwins2, freqs, flim):
+def measure_shift_fwins_phase(fwins1, fwins2, freqs, flims):
 
     nwin, nfreq = fwins1.shape
     fsr = 1.0 / (freqs[1] - freqs[0])
-    flims = np.array([80., 280.])
     ixf = (flims * fsr + 0.5).astype(int)
     yv = freqs[ixf[0]:ixf[1]] * 2 * np.pi
     weights = np.ones(len(yv))
@@ -286,26 +437,26 @@ def measure_shift_fwins_phase(fwins1, fwins2, freqs, flim):
     return out
 
 
-def measure_shift_fwins_phase(fwins1, fwins2, freqs, flim):
+# def measure_shift_fwins_phase(fwins1, fwins2, freqs, flim):
 
-    nwin, nfreq = fwins1.shape
-    fsr = 1.0 / (freqs[1] - freqs[0])
-    flims = np.array([80., 280.])
-    ixf = (flims * fsr + 0.5).astype(int)
-    yv = freqs[ixf[0]:ixf[1]] * 2 * np.pi
-    weights = np.ones(len(yv))
+#     nwin, nfreq = fwins1.shape
+#     fsr = 1.0 / (freqs[1] - freqs[0])
+#     flims = np.array([80., 280.])
+#     ixf = (flims * fsr + 0.5).astype(int)
+#     yv = freqs[ixf[0]:ixf[1]] * 2 * np.pi
+#     weights = np.ones(len(yv))
 
-    out = np.zeros((nwin, 2), dtype=np.float32)
+#     out = np.zeros((nwin, 2), dtype=np.float32)
 
-    for i, (w1, w2) in enumerate(zip(fwins1, fwins2)):
-        ccf = np.conj(w1) * w2
-        phi = np.angle(ccf)
-        phi_win = phi[ixf[0]:ixf[1]]
-        regress = linear_regression_zforce(yv, phi_win, weights=weights)
-        yint, slope, res = regress
-        out[i] = [slope, res]
+#     for i, (w1, w2) in enumerate(zip(fwins1, fwins2)):
+#         ccf = np.conj(w1) * w2
+#         phi = np.angle(ccf)
+#         phi_win = phi[ixf[0]:ixf[1]]
+#         regress = linear_regression_zforce(yv, phi_win, weights=weights)
+#         yint, slope, res = regress
+#         out[i] = [slope, res]
 
-    return out
+#     return out
 
 
 def plot_dvv_sym(vals, dvv_true=None):
@@ -347,8 +498,10 @@ def plot_dvv_sym(vals, dvv_true=None):
     plt.legend()
 
 
-def plot_dvv(vals, dvv_true=None):
+def plot_dvv_inds(vals, dvv_true=None):
     import matplotlib.pyplot as plt
+
+    fig = plt.figure(figsize=(15, 8))
 
     yint, slope, res = vals['regress']
     xv = vals['xvals']
@@ -383,6 +536,54 @@ def plot_dvv(vals, dvv_true=None):
     plt.axvline(coda_start, linestyle='--', color='red', alpha=alpha)
     plt.axvline(-coda_start, linestyle='--', color='red', alpha=alpha)
     plt.legend()
+    plt.tight_layout()
+
+
+def plot_dvv(vals, dvv_true=None):
+    import matplotlib.pyplot as plt
+
+    fig = plt.figure(figsize=(15, 8))
+
+    yint, slope, res = vals['regress']
+    slope *= 100
+    coh = vals['coh']
+    ikeep = vals['ikeep']
+    coeff = vals['coeff']
+    n_outlier = vals['n_outlier']
+    dvv_meas = vals['dvv']
+    sr = vals['sr']
+
+    imax = vals['imax'] / sr * 100
+    coda_start, coda_end = np.array(vals['coda_win']) / sr
+    xv = vals['xvals'] / sr
+
+    tfit = yint + slope * xv
+    plt.plot(xv, tfit, label=f'dvv_meas: {dvv_meas:.3f}')
+
+    if dvv_true is not None:
+        # tfit2 = yint + (dvv_true / 100) * xv
+        tfit2 = yint + dvv_true * xv
+        plt.plot(xv, tfit2, label=f'dvv_true: {dvv_true:.3f}', color='green', linestyle='--')
+
+    plt.scatter(xv[ikeep], imax[ikeep], c=coh[ikeep], alpha=0.8)
+    plt.colorbar()
+    mask = np.ones_like(xv, bool)
+    mask[ikeep] = False
+    plt.scatter(xv[mask], imax[mask], c='red', alpha=0.2, label='ignored')
+
+    title = f"[dvv: {dvv_meas:.4f}%] [corr_coeff: {coeff:.2f}] [outliers: {n_outlier}%] [res_fit: {res:.4f}]"
+
+    plt.title(title)
+    plt.axvline(0, linestyle='--')
+    alpha = 0.5
+    # vel = 3200.
+    # direct = dist / vel * sr
+    plt.axvline(coda_start, linestyle='--', color='red', alpha=alpha)
+    plt.axvline(-coda_start, linestyle='--', color='red', alpha=alpha)
+    plt.xlabel("Lag time (seconds)")
+    plt.ylabel("dvv (%)")
+    plt.legend()
+    plt.tight_layout()
 
 
 def stream_decompose(st, wlen_sec=None, starttime=None):
@@ -585,9 +786,9 @@ def smooth(x, window='boxcar', half_win=3):
     # to apply the window at the borders
     s = np.r_[x[window_len - 1:0:-1], x, x[-1:-window_len:-1]]
     if window == "boxcar":
-        w = scipy.signal.boxcar(window_len).astype('complex')
+        w = scipy.signal.boxcar(window_len).astype(x.dtype)
     else:
-        w = scipy.signal.hanning(window_len).astype('complex')
+        w = scipy.signal.hanning(window_len).astype(x.dtype)
     y = np.convolve(w / w.sum(), s, mode='valid')
     return y[half_win:len(y) - half_win]
 
@@ -765,6 +966,7 @@ def mwcs_msnoise(current, reference, freqmin, freqmax, df, tmin, window_length, 
         delta_t.append(m)
 
         # print phi.shape, v.shape, w.shape
+        # m=slope, phi=phi_keep, v=fkeep 2pi, w=weights
         e = np.sum((phi - m * v) ** 2) / (np.size(v) - 1)
         s2x2 = np.sum(v ** 2 * w ** 2)
         sx2 = np.sum(w * v ** 2)
@@ -784,7 +986,7 @@ def mwcs_msnoise(current, reference, freqmin, freqmax, df, tmin, window_length, 
     if maxind > len(current) + step*df:
         logging.warning("The last window was too small, but was computed")
 
-    return np.array([time_axis, delta_t, delta_err, delta_mcoh]).T
+    return np.array([time_axis, delta_t, delta_err, delta_mcoh])
 
 
 def mwcs_msnoise_single(cci, cri, freqmin, freqmax, df, smoothing_half_win=5):

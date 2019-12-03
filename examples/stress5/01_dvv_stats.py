@@ -49,7 +49,7 @@ logger.info(f' {len(ckeys_all)} xcorr entries ({len(ckeys)} unique pairs)')
 
 reload(xchange)
 coda_start_vel = 3400.
-coda_end_sec = 0.8
+coda_end_sec = 0.6
 dvv_wlen_sec = 0.05
 dvv_fband = np.array([60, 80, 250, 280])
 # dvv_fband = np.array([60, 80, 320, 350])

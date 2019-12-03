@@ -44,6 +44,18 @@ rhandle = redis.Redis(host='localhost', port=6379, db=0)
 ###################################
 
 
+wild = f"%120.%.126%"
+# wild = f"%118%"
+# ck_all = session.query(XCorr.corr_key).all()
+# ckeys = np.unique(session.query(XCorr.corr_key).all())[::100]
+xcorrs = session.query(XCorr).filter(XCorr.corr_key.like(wild)).order_by(XCorr.corr_key).all()[::-1]
+flow.xcorr_load_waveforms(xcorrs, rhandle)
+logger.info(f'query returned {len(xcorrs)} xcorrs')
+
+xcorrs_dat = np.array([x.waveform for x in xcorrs])
+
+xplot.im(xcorrs_dat)
+
 ###########################
 
 reload(xutil)
@@ -51,14 +63,17 @@ reload(xchange)
 vel_s = 3200
 coda_start_vel = 0.7 * vel_s
 coda_end_sec = 0.4
-dvv_wlen_sec = 0.05
+dvv_wlen_sec = 0.02
 dvv_fband = np.array([60, 70, 230, 250])
+wlen_relative = dvv_fband / dvv_wlen_sec
+
+# wlengths = coda_start_vel / dvv_fband
+
+sr = 1000.0
 dvv_outlier_clip = 0.1
 # dvv_outlier_clip = None
-sr = 1000.0
-wlengths = coda_start_vel / dvv_fband
 nrecent = 200
-nrow_avg = 15
+nrow_avg = 2
 # wild = f"%120.%.126%"
 wild = f"%118%"
 # ck_all = session.query(XCorr.corr_key).all()
@@ -93,7 +108,9 @@ for ckey in ckeys:
         xref_sig = xcorrs_dat[icc - 1]
         xcur_sig = xcorrs_dat[icc]
 
-        vals = xchange.dvv(xref_sig, xcur_sig, sr, dvv_wlen_sec, dvv_fband, coda_start_sec, coda_end_sec, dvv_outlier_clip=dvv_outlier_clip)
+        # vals = xchange.dvv(xref_sig, xcur_sig, sr, dvv_wlen_sec, dvv_fband, coda_start_sec, coda_end_sec, dvv_outlier_clip=dvv_outlier_clip)
+        vals = xchange.dvv_phase(xref_sig, xcur_sig, sr, dvv_wlen_sec, dvv_fband[[0, -1]], coda_start_sec, coda_end_sec, step_factor=4)
+
         out.append(vals)
 
     stats.append(xutil.to_dict_of_lists(out))
@@ -101,9 +118,9 @@ for ckey in ckeys:
 print(list(stats[0].keys()))
 
 
-key = 'dvv'
+# key = 'dvv'
 # key = 'n_outlier'
-# key = 'coeff'
+key = 'coeff'
 vals = np.array([pair[key] for pair in stats])
 vals[vals == 0] = np.nan
 # plt.plot(vals.T, alpha=0.2, marker='o')
@@ -149,7 +166,7 @@ xplot.quicksave()
 vals = np.array([np.mean(p['coeff']) for p in stats])
 imax = np.argmax(vals)
 ckey = ckeys[imax]
-nrow_avg = 12
+nrow_avg = 3
 
 xcorrs = session.query(XCorr).filter_by(corr_key=ckey).order_by(XCorr.start_time.desc()).limit(nrecent).all()[::-1]
 flow.xcorr_load_waveforms(xcorrs, rhandle)
@@ -175,6 +192,7 @@ reload(xutil)
 
 xcorrs_dat.shape
 xplot.im(xcorrs_dat, norm=False)
+xplot.im_freq(xcorrs_dat, sr, norm=False)
 
 mx = np.max(xcorrs_dat, axis=1) * 100
 plt.plot(mx[1:])
@@ -233,3 +251,37 @@ plt.tight_layout()
 
 
 ###################################
+
+stations = session.query(Station).all()
+
+
+xlims = [651000, 652000]
+ylims = [4766500, 4768000]
+
+keep = []
+for sta in stations:
+    x, y, z = sta.location
+    if x > xlims[0] and x < xlims[1] and y > ylims[0] and y < ylims[1]:
+        keep.append(sta)
+
+stations = keep[::2]
+locs = np.array([x.location for x in stations])
+lbls = np.array([x.name for x in stations])
+# plt.plot(vals)
+x, y, z = locs.T
+
+fig = plt.figure(figsize=(12, 9), facecolor='white')
+ax = fig.add_subplot(111, projection='3d')
+x, y, z = locs.T
+# ax.scatter(x, y, z, c='green', s=vals * 100)
+im = ax.scatter(x, y, z, c='green', s=50, alpha=0.5)
+for i, lbl in enumerate(lbls):
+    ax.text(x[i], y[i], z[i], lbl)
+ax.set_xlabel('X (m)')
+ax.set_ylabel('Y (m)')
+ax.set_zlabel('Z (m)')
+plt.colorbar(im)
+xplot.set_axes_equal(ax)
+plt.tight_layout()
+
+np.sort(np.array([sta.name for sta in stations], dtype=int))

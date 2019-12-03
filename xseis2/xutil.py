@@ -15,6 +15,49 @@ import io
 # import h5py
 # import datetime
 # from scipy.signal import sosfilt, zpk2sos, iirfilter
+from scipy.stats import linregress
+
+
+def ckey_to_chan_stats(ckeys, vals):
+
+    d = dict()
+    for i, ck in enumerate(ckeys):
+        c1, c2 = ck.split('_')
+        if c1 not in d:
+            d[c1] = [vals[i]]
+            continue
+        if c2 not in d:
+            d[c2] = [vals[i]]
+            continue
+
+        d[c1].append(vals[i])
+        d[c2].append(vals[i])
+
+    return np.array(list(d.keys())), np.array(list(d.values()))
+
+
+def linear_detrend_nan(y):
+    x = np.arange(len(y))
+    not_nan_ind = ~np.isnan(y)
+    m, b, r_val, p_val, std_err = linregress(x[not_nan_ind], y[not_nan_ind])
+    detrend_y = y - (m * x + b)
+    return detrend_y
+
+
+def roundup(x, nearest_multiple):
+    return int(math.ceil(x / nearest_multiple)) * int(nearest_multiple)
+
+
+def whiten_sig(sig, sr, whiten_freqs, pad_multiple=None):
+    if pad_multiple is None:
+        npad = len(sig)
+    else:
+        npad = roundup(len(sig), pad_multiple)
+
+    whiten_win = freq_window(whiten_freqs, npad, sr)
+    fsig = np.fft.rfft(sig, n=npad)
+    fsig = whiten_win * phase(fsig)
+    return np.fft.irfft(fsig)[:len(sig)]
 
 
 def symmetric(data):
@@ -50,7 +93,6 @@ def caus2d(data):
     return data[:, data.shape[1] // 2:]
 
 
-
 def average_adjacent_rows(dat, nrow_avg):
     nrow, ncol = dat.shape
     nrow_new = nrow // nrow_avg
@@ -81,7 +123,7 @@ def maxnorm(dat, scale=1):
 
 
 def xcorr_lagtimes(nsamp, sr=1):
-    hl = nsamp / 2 * sr
+    hl = nsamp / (2 * sr)
     return np.linspace(-hl, hl, nsamp)
 
 
@@ -295,21 +337,37 @@ def g2mad(grid):
     return out
 
 
-def randomize_band(fsig, band, sr):
+def randomize_freq_band(sig, band, sr):
 
-    fnew = fsig.copy()
+    fsig = np.fft.rfft(sig)
     freqmin, freqmax = band
-    samples = len(fnew)
-    freqs = np.abs(fftfreq(samples, 1. / sr))
+    freqs = np.fft.rfftfreq(len(sig), 1.0 / sr)
     idx = np.where(np.logical_and(freqs >= freqmin, freqs <= freqmax))[0]
 
-    part = fnew[idx]
+    part = fsig[idx]
     amps = np.abs(part)
     rand = np.random.uniform(-np.pi, np.pi, len(part))
     angs = np.exp(1j * rand)
-    fnew[idx] = amps * angs
+    fsig[idx] = amps * angs
 
-    return fnew
+    return np.fft.irfft(fsig)
+
+
+# def randomize_band_freq(fsig, band, sr):
+
+#     fnew = fsig.copy()
+#     freqmin, freqmax = band
+#     samples = len(fnew)
+#     freqs = np.abs(fftfreq(samples, 1. / sr))
+#     idx = np.where(np.logical_and(freqs >= freqmin, freqs <= freqmax))[0]
+
+#     part = fnew[idx]
+#     amps = np.abs(part)
+#     rand = np.random.uniform(-np.pi, np.pi, len(part))
+#     angs = np.exp(1j * rand)
+#     fnew[idx] = amps * angs
+
+#     return fnew
 
 
 def roll_data(data, tts):
@@ -747,6 +805,22 @@ def build_slice_inds(start, stop, wlen, stepsize=None):
     return slices
 
 
+def build_welch_wins(start, stop, wlen, stepsize=None):
+
+    if stepsize is None:
+        stepsize = wlen
+
+    overlap = wlen - stepsize
+    imin = np.arange(start, stop - overlap - 1, stepsize)
+    imax = np.arange(start + wlen, stop + stepsize - 1, stepsize)
+    imid = imin + (imax - imin) // 2
+    slices = np.dstack((imin, imid, imax))[0].astype(int)
+    if slices[-1][1] > stop:
+        slices = slices[:-1]
+
+    return slices
+
+
 def freq_window(cf, npts, sr, norm_energy=True):
     nfreq = int(npts // 2 + 1)
     fsr = npts / sr
@@ -852,24 +926,65 @@ def angle(a, b):
     return np.arctan2((a[1] - b[1]), (a[0] - b[0]))
 
 
-def noise1d(npts, freqs, sr, scale, taplen=0.05):
+def noise1d(wlen, freqs, sr, scale, taplen=0.05):
 
-    out = np.zeros(npts, dtype=np.float32)
-    fwin = freq_window(freqs, npts, sr)
-    nfreq = len(fwin)
+    # fwin = freq_window(freqs, wlen, sr)
+    nfreq = int(wlen * 2)
+    fwin = whiten_window(freqs, nfreq, sr)
 
-    fb = np.zeros(npts, dtype=np.complex64)
+    fb = np.zeros(nfreq, dtype=np.complex64)
     phases = np.random.rand(nfreq) * 2 * np.pi
     phases = np.cos(phases) + 1j * np.sin(phases)
 
-    fb[: nfreq] = phases * fwin
-    fb[-nfreq + 1:] = fb[1:nfreq].conjugate()[::-1]
-    # a[i] = np.real(ifft(fb))
-    out += np.real(ifft(fb)) * scale
+    fb = phases * fwin
+    out = np.real(np.fft.irfft(fb, n=nfreq)[:wlen]) * scale
     if taplen > 0:
-        taper_data(out, int(taplen * npts))
+        taper_data(out, int(taplen * wlen))
 
     return out
+
+
+def whiten_window(corners, nfreq, sr, norm_energy=True):
+
+    # freqs = np.fft.rfftfreq(nfreq, 1.0 / sr)
+    fsr = nfreq / sr
+    cf = np.array(corners, dtype=np.float32)
+    cx = (cf * fsr + 0.5).astype(int)
+    # print(cx)
+    # print(freqs[cx])
+
+    win = np.zeros(nfreq, dtype=np.float32)
+    win[:cx[0]] = 0
+    win[cx[0]:cx[1]] = taper_cosine(cx[1] - cx[0])
+    win[cx[1]:cx[2]] = 1
+    win[cx[2]:cx[3]] = taper_cosine(cx[3] - cx[2])[::-1]
+    win[cx[-1]:] = 0
+
+    if norm_energy is True:
+        win /= np.sqrt(energy_freq(win))
+
+    return win
+
+
+# def noise1d(npts, freqs, sr, scale, taplen=0.05):
+
+#     out = np.zeros(npts, dtype=np.float32)
+#     fwin = freq_window(freqs, npts, sr)
+#     nfreq = len(fwin)
+
+#     fb = np.zeros(npts, dtype=np.complex64)
+#     fb = np.zeros(npts, dtype=np.complex64)
+#     phases = np.random.rand(nfreq) * 2 * np.pi
+#     phases = np.cos(phases) + 1j * np.sin(phases)
+
+#     fb[: nfreq] = phases * fwin
+#     fb[-nfreq + 1:] = fb[1:nfreq].conjugate()[::-1]
+#     # a[i] = np.real(ifft(fb))
+#     out += np.real(ifft(fb)) * scale
+#     if taplen > 0:
+#         taper_data(out, int(taplen * npts))
+
+#     return out
 
 
 def add_noise(a, freqs, sr, scale, taplen=0.05):

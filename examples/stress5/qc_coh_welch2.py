@@ -10,41 +10,181 @@ from xseis2 import xutil
 from xseis2 import xchange
 import matplotlib.pyplot as plt
 import pickle
+from scipy.signal import coherence
 
 plt.ion()
 
-# filename = os.path.join(os.environ['SPP_COMMON'], "stations.pickle")
-# with open(filename, 'rb') as f:
-#     stations = pickle.load(f)
-###############################
 
-sr = 1000.0
-keeplag_sec = 1.0
-
-coda_start_vel = 3000.
-coda_end_sec = 0.8
-dvv_wlen_sec = 0.05
-
-dist = 200
-coda_start_sec = dist / coda_start_vel
-
-fband_sig = np.array([50, 80, 280, 300])
-fband_noise = np.array([50, 80, 280, 300])
-whiten_freqs = fband_sig
-# tt_change_percent = 0.0
+sr = 2000.0
+# dvv_wlen_sec = 0.04
+# welch_wlen_sec = 0.02
+cc_wlen_sec = 2.0
+nsamp = int(cc_wlen_sec * sr)
+fband_sig = np.array([50, 60, 290, 300])
+fband_noise = np.array([5, 10, (sr / 2) - 10, sr / 2])
+fband_rand = np.array([180, 200])
 tt_change_percent = 0.01
-noise_scale = 0.2
-# noise_scale = 1.0
-dvv_outlier_clip = 0.1
-step_factor = 4
+noise_scale = 0.03
+#####################
 
-nsamp = int(keeplag_sec * sr)
-
+########################
+reload(xutil)
 reload(xchange)
+reload(xplot)
+
+############################
 
 sig1, sig2 = xchange.mock_corrs_dvv(nsamp, sr, tt_change_percent, fband_sig, fband_noise, noise_scale)
+sig2 = xutil.randomize_freq_band(sig2, fband_rand, sr)
 
-freq_lims = [80., 280.]
+xplot.freq(sig1, sr)
+xplot.freq(sig2, sr)
+
+dvv_wlen_sec = 0.03
+step_factor = 2
+# welch_wlen_sec = dvv_wlen_sec / 2
+# welch_wlen = int(welch_wlen_sec * sr)
+# wlech_nfft = int(nsamp * 2 + 1)
+# nshift = 1
+# dvv_true = 100 * (nshift / sr)
+
+reload(xchange)
+# coeff = xutil.pearson_coeff(cc1, cc2)
+dvv_wlen = int(dvv_wlen_sec * sr)
+# coda_start = int(coda_start_sec * sr)
+# coda_end = int(coda_end_sec * sr)
+# iwin = [coda_start, coda_end]
+# iwin = [0, coda_end]
+iwin = [0, len(sig1)]
+stepsize = dvv_wlen // step_factor
+
+slices = xutil.build_slice_inds(iwin[0], iwin[1], dvv_wlen, stepsize=stepsize)
+xv = np.mean(slices, axis=1)
+
+fdat1, freqs = xchange.fft_slices(sig1, slices, sr)
+fdat2, freqs = xchange.fft_slices(sig2, slices, sr)
+# %timeit fdat2, freqs = xchange.fft_slices(sig2, slices, sr)
+nwin, nfreq = fdat1.shape
+# for i in range(nwin):
+navg = 10
+gxy = np.mean(np.conj(fdat1[:navg]) * fdat2[:navg], axis=0)
+gxx = np.mean(np.conj(fdat1[:navg]) * fdat1[:navg], axis=0)
+gyy = np.mean(np.conj(fdat2[:navg]) * fdat2[:navg], axis=0)
+# gyy = np.mean(fdat2[:navg], axis=0)
+
+# coh = np.abs(gxy) ** 2 / (np.abs(gxx) * np.abs(gyy))
+coh = np.abs(gxy) ** 2 / (np.abs(gxx * gyy))
+# np.allclose(np.abs(gxx * gyy), (np.abs(gxx) * np.abs(gyy)))
+
+plt.plot(freqs, coh, label='coh')
+plt.plot(freqs, np.abs(gxy), alpha=0.5, label='Gxy')
+plt.plot(freqs, np.abs(gxx), alpha=0.5, label='Gxx')
+plt.plot(freqs, np.abs(gyy), alpha=0.5, label='Gyy')
+plt.legend()
+
+# plt.plot(freqs, abs2, alpha=0.5)
+# plt.plot(freqs, abscc)
+
+ixl = 10
+sl = slices[ixl]
+w1 = sig1[0:sl[1]]
+w2 = sig2[0:sl[1]]
+freqs_coh, coh = coherence(w1, w2, sr, nperseg=dvv_wlen, nfft=dvv_wlen * 2)
+
+# freqs_coh, coh = coherence(sig1, sig2, sr, nperseg=dvv_wlen, nfft=dvv_wlen * 2)
+# %timeit freqs_coh, coh = coherence(sig1, sig2, sr, nperseg=dvv_wlen, nfft=dvv_wlen * 2)
+
+plt.plot(freqs_coh, coh)
+plt.xlabel('frequency [Hz]')
+plt.ylabel('Coherence')
+plt.show()
+
+
+
+
+# slices = xutil.build_slice_inds(iwin[0], iwin[1], dvv_wlen * 2, stepsize=stepsize)
+sl = slices[5] + [-dvv_wlen, dvv_wlen]
+w1 = sig1[sl[0]:sl[1]]
+w2 = sig2[sl[0]:sl[1]]
+freqs_coh, coh = coherence(w1, w2, sr, nperseg=dvv_wlen, nfft=dvv_wlen * 2)
+
+sig1 = xutil.noise1d(nsamp, fband_sig, sr, scale=1, taplen=0.1)
+# sig1 = xutil.band_noise(freq_good, sr, nsamp)
+# sig2 = np.roll(sig1, 1).copy()
+sig2 = sig1.copy()
+# sig2 = xutil.randomize_freq_band(sig2, fband_rand, sr)
+sig2 = np.roll(sig2, nshift)
+xplot.freq(sig1, sr)
+xplot.freq(sig2, sr)
+####################################
+# %timeit f, Cxy = coherence(sig1, sig2, sr, nperseg=300)
+freqs, coh = coherence(sig1, sig2, sr, nperseg=welch_wlen, nfft=wlech_nfft)
+# plt.semilogy(f, Cxy)
+plt.plot(freqs, coh)
+plt.xlabel('frequency [Hz]')
+plt.ylabel('Coherence')
+plt.show()
+
+#############################################
+
+from xseis2.xchange import linear_regression_zforce
+
+freq_lims = fband_sig[[1, 3]]
+freqmin, freqmax = freq_lims
+taper_percent = 0.02
+wlen_samp = nsamp
+taper = xutil.taper_window(wlen_samp, taper_percent)
+pad = int(2 * wlen_samp)
+freqs = np.fft.rfftfreq(pad, 1.0 / sr)
+ifkeep = np.where(np.logical_and(freqs >= freqmin, freqs <= freqmax))[0]
+
+fkeep = freqs[ifkeep]
+# fkeep_ang = fkeep * 2 * np.pi
+# weights = np.ones(len(fkeep))
+weights = coh[ifkeep] ** 2
+
+freqs_coh, coh = coherence(sig1, sig2, sr, nperseg=welch_wlen, nfft=pad)
+np.allclose(freqs, freqs_coh)
+
+fs1 = np.fft.rfft(sig1 * taper, n=pad)
+fs2 = np.fft.rfft(sig2 * taper, n=pad)
+# ccf = np.conj(xutil.phase(fs1)) * xutil.phase(fs2)
+ccf = np.conj(fs1) * fs2
+phi = np.angle(ccf)
+phi_keep = phi[ifkeep]
+regress = linear_regression_zforce(fkeep, phi_keep, weights=weights)
+yint, slope, res = regress
+
+# out[i] = [slope, res]
+dvv = 100 * slope / (2 * np.pi)
+plt.scatter(freqs, phi, alpha=0.5)
+# plt.scatter(freqs, phi, alpha=0.5, c=coh)
+plt.scatter(fkeep, phi_keep, c=weights)
+plt.colorbar()
+xv_fit = freqs[ifkeep]
+tfit = yint + slope * xv_fit
+plt.plot(xv_fit, tfit, color='green', linestyle='--')
+alpha = 0.3
+plt.axvline(freqmin, linestyle='--', color='red', alpha=alpha)
+plt.axvline(freqmax, linestyle='--', color='red', alpha=alpha)
+plt.xlabel("freq (Hz)")
+plt.ylabel("angle")
+plt.title(f"dvv: {dvv:.4f}   dvv_true: {dvv_true:.4f}")
+plt.legend()
+
+
+
+
+
+# sig1, sig2 = xchange.mock_corrs_dvv(nsamp, sr, tt_change_percent, fband_sig, fband_noise, noise_scale)
+
+# freq_good = [50, 300]
+# freq_bad = [170, 200]
+# = sig1[:window_length_samples].copy()
+# cri += xutil.band_noise(freq_lims_bad, sr, len(cri)) * 1.0
+
+
+################################
 vals = xchange.dvv_phase(sig1, sig2, sr, dvv_wlen_sec, freq_lims, coda_start_sec, coda_end_sec, step_factor=step_factor)
 
 reload(xchange)
@@ -66,7 +206,105 @@ time_axis, delta_t, delta_err, delta_mcoh = out
 
 plt.scatter(time_axis, delta_t, c=delta_err)
 
+#############################
 
+reload(xchange)
+
+from xseis2.xchange import smooth, getCoherence, nextpow2
+import scipy
+from obspy.signal.invsim import cosine_taper
+from obspy.signal.regression import linear_regression as obspy_linear_regression
+
+
+freqmin, freqmax = freq_lims
+window_length = 0.1
+df = sr
+window_length_samples = np.int(window_length * df)
+smoothing_half_win = 5
+freq_lims_bad = [170, 200]
+
+cci = sig1[:window_length_samples].copy()
+cri = np.roll(sig1[:window_length_samples], 1).copy()
+# cri += xutil.band_noise(freq_lims_bad, sr, len(cri)) * 1.0
+# xplot.freq(cci, sr)
+# xplot.freq(cri, sr)
+
+padd = int(2 ** (nextpow2(window_length_samples) + 2))
+tp = cosine_taper(window_length_samples, 0.85)
+cci = scipy.signal.detrend(cci, type='linear')
+cci *= tp
+cri = scipy.signal.detrend(cri, type='linear')
+cri *= tp
+
+xplot.freq(cci, sr)
+xplot.freq(cri, sr)
+
+fcur = scipy.fftpack.fft(cci, n=padd)[:padd // 2]
+fref = scipy.fftpack.fft(cri, n=padd)[:padd // 2]
+fcur2 = np.abs(fcur) ** 2
+fref2 = np.abs(fref) ** 2
+
+# plt.plot(fcur2)
+# plt.plot(np.abs(fcur) **2)
+# plt.plot(fref2)
+
+# Calculate the cross-spectrum
+X = fref * (fcur.conj())
+# if smoothing_half_win != 0:
+dcur = np.sqrt(smooth(fcur2, window='hanning', half_win=smoothing_half_win))
+dref = np.sqrt(smooth(fref2, window='hanning', half_win=smoothing_half_win))
+X = smooth(X, window='hanning', half_win=smoothing_half_win)
+# dcur = np.sqrt(fcur2)
+# dref = np.sqrt(fref2)
+
+dcs = np.abs(X)
+
+# Find the values the frequency range of interest
+freq_vec = scipy.fftpack.fftfreq(len(X) * 2, 1. / df)[:padd // 2]
+index_range = np.argwhere(np.logical_and(freq_vec >= freqmin,
+                                         freq_vec <= freqmax))
+
+# Get Coherence and its mean value
+coh = getCoherence(dcs, dref, dcur)
+mcoh = np.mean(coh[index_range])
+
+# Get Weights
+w = 1.0 / (1.0 / (coh[index_range] ** 2) - 1.0)
+w[coh[index_range] >= 0.99] = 1.0 / (1.0 / 0.9801 - 1.0)
+w = np.sqrt(w * np.sqrt(dcs[index_range]))
+w = np.real(w)
+# Frequency array:
+v = freq_vec[index_range] * 2 * np.pi
+
+plt.plot(freq_vec, dcur, label='dcur = sqrt(smooth power)')
+plt.plot(freq_vec, dref, label='dref = sqrt(smooth power)')
+plt.plot(freq_vec, dcs, label='dcs = np.abs(smooth(cc_freq))')
+plt.plot(freq_vec, coh, label='coh')
+plt.plot(freq_vec[index_range], w, label='weights')
+plt.legend()
+
+# Phase:
+phi = np.angle(X)
+phi[0] = 0.
+phi = np.unwrap(phi)
+phi = phi[index_range]
+
+# Calculate the slope with a weighted least square linear regression
+# forced through the origin
+# weights for the WLS must be the variance !
+m, em = obspy_linear_regression(v.flatten(), phi.flatten(), w.flatten())
+
+# delta_t.append(m)
+
+# print phi.shape, v.shape, w.shape
+e = np.sum((phi - m * v) ** 2) / (np.size(v) - 1)
+s2x2 = np.sum(v ** 2 * w ** 2)
+sx2 = np.sum(w * v ** 2)
+e = np.sqrt(e * s2x2 / sx2 ** 2)
+
+print(m * sr)
+
+##############
 
 
 # plt.plot(vals['coh'])
