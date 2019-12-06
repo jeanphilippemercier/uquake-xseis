@@ -10,7 +10,7 @@ import scipy.signal
 from xseis2 import xutil
 from numpy.polynomial.polynomial import polyfit
 import matplotlib.pyplot as plt
-from datetime import timedelta
+from datetime import timedelta, datetime
 from loguru import logger
 from numba import njit
 
@@ -52,6 +52,17 @@ def mock_corrs_dvv(nsamp, sr, tt_change_percent, fband_sig, fband_noise, noise_s
     sig1 += noise1
     sig2 += noise2
     return sig1, sig2
+
+
+def stretch_and_mirror(half_in, sr, tt_change_percent, fband_noise, noise_scale):
+
+    # keeplag = nsamp // 2
+    # sig1 = xutil.noise1d(keeplag, fband_sig, sr, scale=1, taplen=0)
+    half = stretch(half_in, sr, tt_change_percent)
+    full = np.concatenate((half[::-1], half))
+    if noise_scale > 0:
+        full += xutil.noise1d(len(full), fband_noise, sr, scale=noise_scale, taplen=0)
+    return full, half
 
 
 def linear_regression_zforce(xv, yv, weights):
@@ -99,7 +110,7 @@ def dvv_phase(cc1, cc2, sr, wlen_sec, freq_lims, coda_start_sec, coda_end_sec, s
     cohs = []
     mcoh = []
     for i, (i0, imid, i1) in enumerate(welch_groups):
-
+        # print(i)
         # coh
         fg1 = fdat1[i0:i1]
         fg2 = fdat2[i0:i1]
@@ -109,10 +120,12 @@ def dvv_phase(cc1, cc2, sr, wlen_sec, freq_lims, coda_start_sec, coda_end_sec, s
         coh = np.abs(gxy) ** 2 / (np.abs(gxx * gyy))
         mcoh.append(np.mean(coh[ix_fkeep]))
         # weights = coh[ix_fkeep] ** 2
-        weights = 1.0 / (1.0 / (coh[ix_fkeep] ** 2) - 1.0)
+        weights = 1.0 / (1.0 / (coh[ix_fkeep] ** 2) - 0.9999)
         weights /= np.sum(weights)
         cohs.append(coh)
         # cohs.append(weights)
+        # if i == 98:
+            # breakpoint()
 
         # dvv
         ccf = np.conj(fdat1[imid]) * fdat2[imid]
@@ -620,7 +633,7 @@ def xcorr_ckeys_stack_slices(rawdat, sr, ckeys, cc_wlen_sec, keeplag_sec, stepsi
 
     padlen = int(cc_wlen_sec * sr * 2)
     nfreq = int(padlen // 2 + 1)
-    whiten_freqs = np.array(whiten_freqs)
+    # whiten_freqs = np.array(whiten_freqs)
 
     logger.info(f'ncc: {ncc}, cclen: {cc_wlen_sec}s, keeplag: {keeplag_sec}s, stepsize: {stepsize_sec} s')
     # print(cclen, padlen, keeplag, stepsize)
@@ -631,6 +644,7 @@ def xcorr_ckeys_stack_slices(rawdat, sr, ckeys, cc_wlen_sec, keeplag_sec, stepsi
 
     whiten_win = None
     if whiten_freqs is not None:
+        whiten_freqs = np.array(whiten_freqs)
         whiten_win = xutil.freq_window(whiten_freqs, padlen, sr)
 
     logger.info(f'Computing {ncc} xcorrs for {nslices} slices of {cc_wlen_sec}s each')
@@ -659,6 +673,7 @@ def xcorr_ckeys_stack_slices(rawdat, sr, ckeys, cc_wlen_sec, keeplag_sec, stepsi
 
             if onebit is True:
                 sig[:] = np.sign(xutil.bandpass(sig, whiten_freqs[[0, -1]], sr))
+
             fsig = np.fft.rfft(sig, n=padlen)
 
             if whiten_win is not None:

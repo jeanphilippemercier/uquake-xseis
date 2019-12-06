@@ -16,6 +16,48 @@ import io
 # import datetime
 # from scipy.signal import sosfilt, zpk2sos, iirfilter
 from scipy.stats import linregress
+from datetime import timedelta, datetime
+
+
+def hour_round_nearest(t):
+    # Rounds to nearest hour by adding a timedelta hour if minute >= 30
+    return (t.replace(second=0, microsecond=0, minute=0, hour=t.hour) + timedelta(hours=t.minute // 30))
+
+
+def hour_round_down(t):
+    return t.replace(second=0, microsecond=0, minute=0, hour=t.hour)
+
+
+def hour_round_up(t):
+    return t.replace(second=0, microsecond=0, minute=0, hour=t.hour) + timedelta(hours=1)
+
+
+def datetime_bins(start, stop, wlen, stepsize=None):
+
+    if stepsize is None:
+        stepsize = wlen
+
+    bins = []
+    curr = start
+    while curr < stop:
+        d0 = curr
+        d1 = curr + wlen
+        # bins.append([d0, d1])
+        bins.append(d0)
+        curr += stepsize
+
+    return np.array(bins)
+
+
+def ckeys_remove_chans(ckeys, names):
+    ikeep = []
+    for i, ck in enumerate(ckeys):
+        c1, c2 = ck.split('_')
+        if c1 in names or c2 in names:
+            continue
+        ikeep.append(i)
+
+    return ckeys[np.array(ikeep)]
 
 
 def ckey_to_chan_stats(ckeys, vals):
@@ -928,42 +970,46 @@ def angle(a, b):
 
 def noise1d(wlen, freqs, sr, scale, taplen=0.05):
 
+    # padlen =
     # fwin = freq_window(freqs, wlen, sr)
-    nfreq = int(wlen * 2)
-    fwin = whiten_window(freqs, nfreq, sr)
+    # nfreq = int(npts // 2 + 1)
+    # fwin = whiten_window(freqs, nfreq, sr)
+    fwin = freq_window(freqs, wlen, sr)
+    nfreq = len(fwin)
 
     fb = np.zeros(nfreq, dtype=np.complex64)
     phases = np.random.rand(nfreq) * 2 * np.pi
     phases = np.cos(phases) + 1j * np.sin(phases)
 
     fb = phases * fwin
-    out = np.real(np.fft.irfft(fb, n=nfreq)[:wlen]) * scale
+    # out = np.real(np.fft.irfft(fb, n=nfreq)[:wlen]) * scale
+    out = np.real(np.fft.irfft(fb, n=wlen)[:wlen]) * scale
     if taplen > 0:
         taper_data(out, int(taplen * wlen))
 
     return out
 
 
-def whiten_window(corners, nfreq, sr, norm_energy=True):
+# def whiten_window(corners, nfreq, sr, norm_energy=True):
 
-    # freqs = np.fft.rfftfreq(nfreq, 1.0 / sr)
-    fsr = nfreq / sr
-    cf = np.array(corners, dtype=np.float32)
-    cx = (cf * fsr + 0.5).astype(int)
-    # print(cx)
-    # print(freqs[cx])
+#     # freqs = np.fft.rfftfreq(nfreq, 1.0 / sr)
+#     fsr = nfreq / sr
+#     cf = np.array(corners, dtype=np.float32)
+#     cx = (cf * fsr + 0.5).astype(int)
+#     # print(cx)
+#     # print(freqs[cx])
 
-    win = np.zeros(nfreq, dtype=np.float32)
-    win[:cx[0]] = 0
-    win[cx[0]:cx[1]] = taper_cosine(cx[1] - cx[0])
-    win[cx[1]:cx[2]] = 1
-    win[cx[2]:cx[3]] = taper_cosine(cx[3] - cx[2])[::-1]
-    win[cx[-1]:] = 0
+#     win = np.zeros(nfreq, dtype=np.float32)
+#     win[:cx[0]] = 0
+#     win[cx[0]:cx[1]] = taper_cosine(cx[1] - cx[0])
+#     win[cx[1]:cx[2]] = 1
+#     win[cx[2]:cx[3]] = taper_cosine(cx[3] - cx[2])[::-1]
+#     win[cx[-1]:] = 0
 
-    if norm_energy is True:
-        win /= np.sqrt(energy_freq(win))
+#     if norm_energy is True:
+#         win /= np.sqrt(energy_freq(win))
 
-    return win
+#     return win
 
 
 # def noise1d(npts, freqs, sr, scale, taplen=0.05):

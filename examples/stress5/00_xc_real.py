@@ -27,37 +27,39 @@ import pickle
 
 plt.ion()
 
+overwrite = False
+# overwrite = True
+
 ################################
 logger.info('Connect to psql database')
 db_string = "postgres://postgres:postgres@localhost"
 db = create_engine(db_string)
 print(db.table_names())
 session = sessionmaker(bind=db)()
-flow.sql_drop_tables(db)
-session.commit()
-# session.query(XCorr).delete()
-# session.query(VelChange).delete()
-# session.close()
+if overwrite:
+    flow.sql_drop_tables(db)
+    session.commit()
 Base.metadata.create_all(db)
-session.commit()
 
 ##################################
 logger.info('Connect to redis database')
 rhandle = redis.Redis(host='localhost', port=6379, db=0)
-rhandle.flushall()
+if overwrite:
+    rhandle.flushall()
 ###################################
 
 # dsr = 2000.0
 # PARAMS - config
-whiten_freqs = np.array([60, 80, 300, 320])
+# whiten_freqs = np.array([60, 80, 300, 320])
+whiten_freqs = np.array([40, 50, 390, 400])
 cc_wlen_sec = 10.0
-stepsize_sec = cc_wlen_sec
+stepsize_sec = cc_wlen_sec / 2
 # stepsize_sec = cc_wlen_sec / 2
 keeplag_sec = 1.0
-stacklen_sec = 100.0
+# stacklen_sec = 100.0
 min_pair_dist = 50
 max_pair_dist = 800
-nstack_min_percent = 80
+nstack_min_percent = 50
 onebit = False
 
 ####################################
@@ -65,30 +67,18 @@ onebit = False
 with open(os.path.join(os.environ['SPP_COMMON'], "stations.pickle"), 'rb') as f:
     stations_pkl = pickle.load(f)
 
-flow.fill_tables_sta_chan(stations_pkl, session)
-stations = session.query(Station).all()
-flow.fill_table_station_pairs(stations, session)
+if overwrite:
+    flow.fill_tables_sta_chan(stations_pkl, session)
+    stations = session.query(Station).all()
+    flow.fill_table_station_pairs(stations, session)
 
 ###############################
-
-
-def ckeys_remove_chans(ckeys, names):
-    ikeep = []
-    for i, ck in enumerate(ckeys):
-        c1, c2 = ck.split('_')
-        if c1 in names or c2 in names:
-            continue
-        ikeep.append(i)
-
-    return ckeys[np.array(ikeep)]
-
 
 pairs = session.query(StationPair).filter(StationPair.dist.between(min_pair_dist, max_pair_dist)).filter().all()
 
 db_corr_keys = flow.ckeys_from_stapairs(pairs)
-db_corr_keys = ckeys_remove_chans(db_corr_keys, xchange.ot_bad_chans())
+db_corr_keys = xutil.ckeys_remove_chans(db_corr_keys, xchange.ot_bad_chans())
 logger.info(f'{len(db_corr_keys)} potential corr keys')
-
 
 ###################################
 
@@ -101,6 +91,8 @@ data_fles = np.sort(glob(os.path.join(data_src, '*.npz')))
 fproc = session.query(DataFile).all()
 print(fproc)
 
+logger.info(f"nfiles: {len(data_fles)}")
+
 
 reload(xchange)
 reload(xutil)
@@ -108,7 +100,7 @@ reload(flow)
 # session.query(XCorr).delete()
 
 for i, fname in enumerate(data_fles[:-1]):
-    print(f"processing {i} / {len(data_fles)}")
+    logger.info(f"processing {i} / {len(data_fles)}")
 
     basename = os.path.basename(fname)
 
@@ -134,11 +126,24 @@ for i, fname in enumerate(data_fles[:-1]):
 
 ###################################################
 
-# fname = data_fles[0]
+# fname = data_fles[-2]
 # data, sr, starttime, endtime, chan_names = flow.load_npz_continuous(fname)
 
-# plt.plot(data[10])
+# # plt.plot(data[10])
 # xplot.freq(data[10][:100000], sr)
+
+
+# padlen = int(cc_wlen_sec * sr * 2)
+# nfreq = int(padlen // 2 + 1)
+
+# freqs = np.fft.rfftfreq(padlen, 1.0 / sr)
+
+# whiten_freqs = np.array(whiten_freqs)
+# w0 = xutil.freq_window(whiten_freqs, padlen, sr)
+# w1 = xutil.whiten_window(whiten_freqs, nfreq, sr)
+
+# plt.plot(freqs, w0)
+# plt.plot(freqs, w1)
 
 
 # def whiten_sig(sig, sr, whiten_freqs):

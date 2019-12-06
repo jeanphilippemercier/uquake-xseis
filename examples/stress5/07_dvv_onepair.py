@@ -57,10 +57,10 @@ reload(xchange)
 vel_s = 3200
 # vel_s = 8000
 coda_start_vel = 0.7 * vel_s
-coda_end_sec = 0.8
+coda_end_sec = 0.5
 dvv_wlen_sec = 0.02
 dvv_freq_lims = np.array([70, 240])
-dvv_fband = np.array([60, 80, 240, 250])
+# dvv_fband = np.array([60, 80, 240, 250])
 wlen_relative = dvv_freq_lims / dvv_wlen_sec
 nwin_welch = 10
 step_factor = 10
@@ -73,8 +73,8 @@ nrecent = 200
 ckeys = xchange.ot_best_pairs()
 
 # ckey = '.131.X_.79.X'
-ckey = ckeys[3]
-nrow_avg = 12
+ckey = ckeys[1]
+nrow_avg = 10
 reload(xchange)
 
 
@@ -94,12 +94,12 @@ times = xutil.xcorr_lagtimes(cclen, sr)
 # icoda = np.where((times < coda_end_sec) & (times > coda_start_sec))
 icoda = np.where((np.abs(times) < coda_end_sec) & (np.abs(times) > coda_start_sec))
 out = []
-pcc = []
+
 for icc in range(1, len(xcorrs_dat)):
     xref_sig = xcorrs_dat[icc - 1]
     xcur_sig = xcorrs_dat[icc]
 
-    pcc.append(xutil.pearson_coeff(xref_sig[icoda], xcur_sig[icoda]))
+    # pcc.append(xutil.pearson_coeff(xref_sig[icoda], xcur_sig[icoda]))
 
     # dvv_out = xchange.dvv(xref_sig, xcur_sig, sr, dvv_wlen_sec, dvv_fband, coda_start_sec, coda_end_sec, dvv_outlier_clip=dvv_outlier_clip)
     # dvv_out = xchange.dvv_phase_no_weights(xref_sig, xcur_sig, sr, dvv_wlen_sec, dvv_freq_lims, coda_start_sec, coda_end_sec, step_factor=step_factor)
@@ -112,9 +112,9 @@ reload(xutil)
 reload(xplot)
 #####################
 plt.plot(stat['dvv'])
-plt.plot(pcc)
-ix = np.argmax(pcc)
-ix = 1
+# plt.plot(pcc)
+ix = np.argmax(stat['coeff'])
+ix = -1
 
 vals = out[ix]
 reload(xchange)

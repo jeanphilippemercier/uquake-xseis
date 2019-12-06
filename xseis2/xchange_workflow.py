@@ -12,7 +12,7 @@ from xseis2 import xutil
 from xseis2 import xchange
 # from xseis2 import xio
 
-from xseis2.xsql import Channel, Station, StationPair, VelChange, XCorr, ChanPair
+from xseis2.xsql import Channel, Station, StationPair, StationDvv, XCorr, ChanPair
 
 from loguru import logger
 
@@ -21,6 +21,73 @@ from loguru import logger
 #     station = Column(String(10))
 #     quality = Column(Integer)
 #     samplerate = Column(Float)
+
+
+def unique_ordered(session, sql_class_attr):
+    return np.array(session.query(sql_class_attr).distinct().order_by(sql_class_attr.asc()).all()).flatten()
+
+
+def time_group_and_stack_xcorrs(xcorrs, nhour_stack):
+
+    xgroups, dbins = group_xcorrs_by_time(xcorrs, nhour_stack)
+    # [len(x) for x in xgroups]
+
+    xcorrs_stack = []
+    for xg, new_start_time in zip(xgroups, dbins):
+        xnew = stack_xcorrs(xg, new_start_time, nhour_stack)
+        xcorrs_stack.append(xnew)
+
+    return xcorrs_stack
+
+
+def stack_xcorrs(xcorrs, new_start_time, new_length):
+    ex = xcorrs[0]
+    # pipe.set(dkey, xutil.array_to_bytes(sig))
+
+    sig = np.mean(np.array([x.waveform for x in xcorrs]), axis=0)
+    # new_nstack = np.mean(np.array([x.nstack for x in xcorrs]))
+    nhour_data = np.sum(np.array([x.nstack / 100 * x.length for x in xcorrs]))
+    new_nstack = nhour_data / new_length * 100
+
+    xnew = XCorr(corr_key=ex.corr_key, start_time=new_start_time, length=new_length, nstack=new_nstack, samplerate=ex.samplerate)
+    # xnew = XCorr(corr_key=ex.corr_key, channel1_name=ex.channel1_name, channel2_name=ex.channel2_name, stationpair_name=ex.stationpair_name, start_time=new_start_time, length=new_length, nstack=new_nstack, samplerate=ex.samplerate)
+    xnew.waveform = sig
+
+    return xnew
+
+
+def write_xcorrs(xcorrs, session, rhandle):
+
+    pipe = rhandle.pipeline()
+    for xc in xcorrs:
+        redis_key = f"{str(xc.start_time)} {xc.corr_key}"
+        xc.waveform_redis_key = redis_key
+        pipe.set(redis_key, xutil.array_to_bytes(xc.waveform))
+
+    pipe.execute()  # add data to redis
+    session.add_all(xcorrs)  # add metadata rows to sql
+    session.commit()
+
+
+def group_xcorrs_by_time(xcorrs, blocklen_hours):
+
+    wlen = timedelta(hours=blocklen_hours)
+
+    dates = np.array([x.start_time for x in xcorrs])
+    start = xutil.hour_round_down(np.min(dates))
+    stop = xutil.hour_round_up(np.max(dates))
+    dbins = xutil.datetime_bins(start, stop, wlen)
+
+    xgroups = [[] for i in range(len(dbins))]
+
+    for xc in xcorrs:
+        ind = np.argmin(np.abs(dbins - xc.start_time))
+        xgroups[ind].append(xc)
+
+    xgroups = np.array(xgroups)
+    ikeep = np.where(np.array([len(x) for x in xgroups]) > 0)[0]
+
+    return xgroups[ikeep], dbins[ikeep]
 
 
 def load_npz_continuous(fname):
@@ -37,6 +104,20 @@ def load_npz_continuous(fname):
     return data, sr, starttime, endtime, chan_names
 
 
+def load_npz_continuous_meta(fname):
+    from obspy import UTCDateTime
+
+    with np.load(fname) as npz:
+        sr = float(npz['sr'])
+        chan_names = npz['chans']
+        starttime = UTCDateTime(str(npz['start_time'])).datetime
+        # data = npz['data'].astype(np.float32)
+        # data[data == 0] = -1
+    endtime = starttime + timedelta(minutes=10)
+    data = None
+    return data, sr, starttime, endtime, chan_names
+
+
 def ckeys_from_stapairs(pairs):
 
     db_corr_keys = []
@@ -44,58 +125,63 @@ def ckeys_from_stapairs(pairs):
     for pair in pairs:
         # print(pair)
         sta1, sta2 = pair.station1, pair.station2
-        for chan1, chan2 in itertools.product(sta1.channels, sta2.channels):
-            corr_key = f".{chan1}_.{chan2}"
+        for comp1, comp2 in itertools.product(sta1.channels, sta2.channels):
+            chan1 = f".{sta1.name}.{comp1.upper()}"
+            chan2 = f".{sta2.name}.{comp2.upper()}"
+            corr_key = f"{chan1}_{chan2}"
             db_corr_keys.append(corr_key)
 
     return np.array(db_corr_keys)
 
 
-def fill_tables_sta_chan(stations, session, clear=True):
-
-    if clear:
-        session.query(StationPair).delete()
-        session.query(Channel).delete()
-        session.query(Station).delete()
-        session.commit()
-
-    sta_rows = []
-    chan_rows = []
-
-    for sta in sorted(stations, key=lambda x: x.code):
-        chans = sorted(sta.channels, key=lambda x: x.code)
-        chan_names = []
-
-        for chan in chans:
-            chan_name = f"{sta.code}.{chan.code}"
-            chan_rows.append(Channel(name=chan_name, component=chan.code, station_name=sta.code, quality=1))
-
-            chan_names.append(chan_name)
-
-        db_station = Station(name=sta.code, channels=chan_names, location=sta.loc)
-        sta_rows.append(db_station)
-
-    session.add_all(sta_rows)
-    session.add_all(chan_rows)
-    session.commit()
-
-
-# def fill_table_stations(stations, session, clear=True):
+# def fill_tables_sta_chan(stations, session, clear=True):
 
 #     if clear:
+#         session.query(StationPair).delete()
+#         session.query(Channel).delete()
 #         session.query(Station).delete()
+#         session.commit()
 
-#     rows = []
-#     for i, sta in enumerate(stations):
-#         chans = sorted([c.code for c in sta.channels])
-#         db_station = Station(code=sta.code, channels=chans, location=sta.loc)
-#         rows.append(db_station)
+#     sta_rows = []
+#     chan_rows = []
 
-#     session.add_all(rows)
+#     for sta in sorted(stations, key=lambda x: x.code):
+#         chans = sorted(sta.channels, key=lambda x: x.code)
+#         chan_names = []
+
+#         for chan in chans:
+#             chan_name = f"{sta.code}.{chan.code}"
+#             chan_rows.append(Channel(name=chan_name, component=chan.code, station_name=sta.code, quality=1))
+
+#             chan_names.append(chan_name)
+
+#         db_station = Station(name=sta.code, channels=chan_names, location=sta.loc)
+#         sta_rows.append(db_station)
+
+#     session.add_all(sta_rows)
+#     session.add_all(chan_rows)
 #     session.commit()
 
 
-def fill_table_station_pairs(stations, session, clear=True):
+def fill_table_stations(stations, session, clear=True):
+
+    if clear:
+        session.query(Station).delete()
+
+    rows = []
+
+    for sta in sorted(stations, key=lambda x: x.code):
+        chans = sorted([c.code for c in sta.channels])
+        db_station = Station(name=sta.code, channels=chans, location=sta.loc)
+        rows.append(db_station)
+
+    session.add_all(rows)
+    session.commit()
+
+
+def fill_table_station_pairs(session, stations=None, clear=True):
+    if stations is None:
+        stations = session.query(Station).all()
 
     if clear:
         session.query(StationPair).delete()
@@ -113,13 +199,14 @@ def fill_table_station_pairs(stations, session, clear=True):
     session.commit()
 
 
-def fill_table_xcorrs(dc, nstack, ckeys, starttime, endtime, session, rhandle, nstack_min_percent=0):
+def fill_table_xcorrs(dc, sr, nstack, ckeys, starttime, endtime, session, rhandle, nstack_min_percent=0):
     """
     Fill database with cross-correlations
     """
     ncc, nsamp = dc.shape
     logger.info(f'Adding {ncc} correlations for {starttime} to database')
     length_hours = (endtime - starttime).total_seconds() / 3600.
+    # length_minutes = int((endtime - starttime).total_seconds() / 60)
 
     pipe = rhandle.pipeline()
     rows = []
@@ -128,17 +215,47 @@ def fill_table_xcorrs(dc, nstack, ckeys, starttime, endtime, session, rhandle, n
             continue
         # print(i)
         ckey = ckeys[i]
-        k1, k2 = ckey.split("_")
-        c1, c2 = k1[1:], k2[1:]
-        spair = f"{k1.split('.')[1]}_{k2.split('.')[1]}"
+        # k1, k2 = ckey.split("_")
+        # c1, c2 = k1[1:], k2[1:]
+        # spair = f"{k1.split('.')[1]}_{k2.split('.')[1]}"
         dkey = f"{str(starttime)} {ckey}"
 
         pipe.set(dkey, xutil.array_to_bytes(sig))
-        rows.append(XCorr(corr_key=ckey, channel1_name=c1, channel2_name=c2, stationpair_name=spair, start_time=starttime, length=length_hours, nstack=float(nstack[i]), waveform_redis_key=dkey))
+        rows.append(XCorr(corr_key=ckey, start_time=starttime, length=length_hours, nstack=float(nstack[i]), waveform_redis_key=dkey, samplerate=sr))
+        # rows.append(XCorr(corr_key=ckey, channel1_name=c1, channel2_name=c2, stationpair_name=spair, start_time=starttime, length=length_hours, nstack=float(nstack[i]), waveform_redis_key=dkey, samplerate=sr))
 
     pipe.execute()  # add data to redis
     session.add_all(rows)  # add metadata rows to sql
     session.commit()
+
+
+def fill_table_chanpairs(session, min_pair_dist=0, max_pair_dist=99999, bad_chans=None):
+
+    logger.info(f'Clear and fill ChanPair PSQL table')
+    session.query(ChanPair).delete()
+
+    sta_pairs = session.query(StationPair).filter(StationPair.dist.between(min_pair_dist, max_pair_dist)).filter().all()
+
+    rows = []
+
+    for pair in sta_pairs:
+        sta1, sta2 = pair.station1, pair.station2
+        dist = pair.dist
+        for comp1, comp2 in itertools.product(sta1.channels, sta2.channels):
+            chan1 = f".{sta1.name}.{comp1.upper()}"
+            chan2 = f".{sta2.name}.{comp2.upper()}"
+            corr_key = f"{chan1}_{chan2}"
+            if chan1 in bad_chans or chan2 in bad_chans:
+                # print(f"bad {corr_key}")
+                continue
+
+            # print(corr_key)
+            rows.append(ChanPair(name=corr_key, dist=dist, stationpair_name=pair.name))
+
+    session.add_all(rows)  # add rows to sql
+    session.commit()
+
+    logger.info(f'Added {len(rows)} channel pairs')
 
 
 def xcorr_load_waveforms(xcorr_objects, rhandle):
@@ -166,33 +283,6 @@ def sql_drop_tables(db):
 
     for table in reversed(metadata.sorted_tables):
         table.drop(db)
-
-
-def fill_table_chanpairs(stations, session, min_pair_dist=0, max_pair_dist=99999):
-
-    logger.info(f'Clear and fill ChanPair PSQL table with {len(stations)} stations')
-    session.query(ChanPair).delete()
-
-    stations_sorted = sorted(stations, key=lambda x: x.code)
-
-    rows = []
-    for sta1, sta2 in itertools.combinations(stations_sorted, 2):
-        inter_dist = xutil.dist(sta1.loc, sta2.loc)
-        # print(sta1.code, sta2.code, inter_dist)
-        if inter_dist < min_pair_dist or inter_dist > max_pair_dist:
-            continue
-
-        for chan1, chan2 in itertools.product(sta1.channels, sta2.channels):
-            # print(chan1.code, chan2.code)
-            corr_key = f".{sta1.code}.{chan1.code.upper()}_.{sta2.code}.{chan2.code.upper()}"
-            # print(corr_key)
-            rows.append(ChanPair(corr_key=corr_key, inter_dist=inter_dist,
-                                 station1=sta1.code, station2=sta2.code))
-
-    session.add_all(rows)  # add rows to sql
-    session.commit()
-
-    logger.info(f'Added {len(rows)} channel pairs')
 
 
 def measure_dvv_xcorrs(session, rhandle):
@@ -229,28 +319,27 @@ def measure_dvv_xcorrs(session, rhandle):
             cc_cur.error = error
 
 
-def measure_dvv_stations(session):
-    nrecent = 10
+def measure_dvv_stations(session, nhour_stack):
 
-    ckeys = np.unique(session.query(XCorr.ckey).all())
+    ckeys = unique_ordered(session, XCorr.corr_key)
 
     stas = []
     for ck in ckeys:
-        c1, c2 = ck.split('_')
-        stas.extend([c1[:-2], c2[:-2]])
+        # stas.extend([c[:-1] for c in ck.split('_')])
+        stas.extend([c.split('.')[1] for c in ck.split('_')])
 
     stas = np.unique(stas)
-
-    res = session.query(XCorr.time).distinct().all()
-    times = np.sort([x[0] for x in res])[-nrecent:]
+    # times = np.array(session.query(XCorr.start_time).distinct().all()).flatten()
+    times = np.array(session.query(XCorr.start_time).filter(XCorr.length == nhour_stack).distinct().all()).flatten()
 
     for dtime in times:
         for sta in stas:
-            out = session.query(XCorr.dvv).filter(XCorr.time == dtime).filter(XCorr.ckey.like(f"%{sta}%")).filter(XCorr.dvv.isnot(None)).all()
+            out = session.query(XCorr.velocity_change).filter(XCorr.start_time == dtime).filter(XCorr.corr_key.like(f"%.{sta}.%")).filter(XCorr.velocity_change.isnot(None)).all()
+
             if len(out) == 0:
                 continue
             print(sta, len(out))
-            session.add(VelChange(time=dtime, sta=sta, dvv=np.median(out), error=np.std(out)))
+            session.add(StationDvv(start_time=dtime, station=sta, velocity_change=np.median(out), error=np.std(out), navg=len(out)))
         session.commit()
 
 

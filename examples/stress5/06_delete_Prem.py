@@ -21,7 +21,7 @@ import shutil
 
 # from microquake.core.helpers.time import get_time_zone
 
-flast = "ob_data_2019-11-30T02:52:14.608000Z.npz"
+flast = "ob_data_2019-12-03T14:51:54.099960Z.npz"
 
 # ddir = os.path.join(os.environ['SPP_COMMON'], "data_dump")
 
