@@ -37,6 +37,26 @@ def ot_bad_chans():
       dtype='<U6')
 
 
+def cc_noise_level(dat):
+    c1 = np.mean(dat ** 2, axis=0)
+    c2 = np.mean(dat, axis=0) ** 2
+    noise = np.sqrt((c1 - c2) / (dat.shape[0] - 1))
+
+    return noise
+
+
+def assess_snr(xcorrs_dat, nsmooth):
+    stack = np.mean(xcorrs_dat, axis=0)
+    signal = xutil.smooth(xutil.envelope(stack), nsmooth)
+
+    noise = cc_noise_level(xcorrs_dat)
+    noise = xutil.smooth(noise, nsmooth)
+
+    snr = signal / noise
+
+    return snr, signal, noise
+
+
 def mock_corrs_dvv(nsamp, sr, tt_change_percent, fband_sig, fband_noise, noise_scale):
 
     keeplag = nsamp // 2

@@ -20,6 +20,13 @@ from matplotlib.pyplot import rcParams
 rcParams['figure.figsize'] = 11, 8
 
 
+def axvline_times(times, mirror=True, **kwargs):
+    for x in times:
+        axvline(x, **kwargs)
+        if mirror:
+            axvline(-x, **kwargs)
+
+
 def axvline(*args, **kwargs):
     defs = {'linestyle': '--', 'alpha': 0.5, "color": 'red'}
     for k, v in defs.items():
@@ -217,10 +224,15 @@ def im_freq(d, sr, norm=False, xlims=None):
     n = fd.shape[1]
     freq = fftpack.rfftfreq(n, d=1. / sr)
 
-    plt.imshow(fd, aspect='auto', extent=[freq[0], freq[-1], 0, fd.shape[0]], origin='lower', interpolation='none')
+    im = plt.imshow(fd, aspect='auto', extent=[freq[0], freq[-1], 0, fd.shape[0]], origin='lower', interpolation='none')
     if xlims is not None:
         plt.xlim(xlims)
-    plt.show()
+
+    plt.xlabel('Freq (Hz)')
+    plt.ylabel('Signal #')
+    plt.tight_layout()
+
+    return im
 
 
 def im(d, norm=True, savedir=None, tkey='im_raw', cmap='viridis', aspect='auto', extent=None, locs=None, labels=None, times=None, title=None):

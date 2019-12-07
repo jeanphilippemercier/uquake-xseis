@@ -8,15 +8,10 @@ import os
 import glob
 import itertools
 import io
-# import pickle
-# import matplotlib.pyplot as plt
-# import matplotlib.gridspec as gridspec
-# import subprocess
-# import h5py
-# import datetime
-# from scipy.signal import sosfilt, zpk2sos, iirfilter
 from scipy.stats import linregress
 from datetime import timedelta, datetime
+from scipy.signal import hilbert
+from scipy.ndimage.filters import gaussian_filter
 
 
 def hour_round_nearest(t):
@@ -1135,13 +1130,19 @@ def add_noise2(data, band, sr, power):
         d += band_noise(band, sr, samples) * power
 
 
-def envelope(data):
-    slen = len(data)
-    FFT = fft(data, slen)
-    FFT[1: slen // 2] *= 2
-    FFT[slen // 2:] = 0
-    return np.abs(ifft(FFT))
+# def envelope(data):
+#     slen = len(data)
+#     FFT = fft(data, slen)
+#     FFT[1: slen // 2] *= 2
+#     FFT[slen // 2:] = 0
+#     return np.abs(ifft(FFT))
 
+def envelope(data, **kwargs):
+    return np.abs(hilbert(data, **kwargs))
+
+
+def smooth(data, nsmooth, **kwargs):
+    return gaussian_filter(data, nsmooth, **kwargs)
 
 # def pairs_excluding_acoustic():
         # fd = rfft(sig)
