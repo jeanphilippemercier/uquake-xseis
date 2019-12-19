@@ -25,13 +25,41 @@ from obspy import UTCDateTime
 import matplotlib.pyplot as plt
 import pickle
 
+from microquake.core.settings import settings
+
 plt.ion()
+
+#######################################################
+#  xcorr processing params
+#######################################################
+
+params = settings.COMPUTE_XCORRS
+print(params)
+whiten_freqs = np.array(params.whiten_corner_freqs)
+cc_wlen_sec = params.wlen_sec
+stepsize_sec = params.stepsize_sec
+keeplag_sec = params.keeplag_sec
+pair_dist_min = params.pair_dist_min
+pair_dist_max = params.pair_dist_max
+samplerate_decimated = params.samplerate_decimated
+onebit = params.onebit_normalization
+bad_chans = np.array(params.channel_blacklist)
+
+# extra params #############################
+onebit = False
+nstack_min_percent = 50
+
+noise_freqs = np.array([20, 30, 600, 650])
+tt_change_percent = 0.001
+noise_scale = 0.1
 
 # overwrite = False
 overwrite = True
-# synthetic = True
 
-################################
+#######################################################
+#  connect to databases
+#######################################################
+
 logger.info('Connect to psql database')
 db_string = "postgres://postgres:postgres@localhost"
 db = create_engine(db_string)
@@ -49,24 +77,6 @@ if overwrite:
     rhandle.flushall()
 
 #######################################################
-#  xcorr processing params
-#######################################################
-# dsr = 2000.0
-# PARAMS - config
-# whiten_freqs = np.array([60, 80, 300, 320])
-whiten_freqs = np.array([40, 50, 390, 400])
-noise_freqs = np.array([20, 30, 600, 650])
-cc_wlen_sec = 10.0
-stepsize_sec = cc_wlen_sec / 2
-# stepsize_sec = cc_wlen_sec / 2
-keeplag_sec = 1.0
-# stacklen_sec = 100.0
-min_pair_dist = 50
-max_pair_dist = 800
-nstack_min_percent = 50
-onebit = False
-
-#######################################################
 #  create/fill sql databases
 #######################################################
 
@@ -78,7 +88,7 @@ if overwrite:
     flow.fill_table_stations(stations_pkl, session)
     # stations = session.query(Station).all()
     flow.fill_table_station_pairs(session)
-    flow.fill_table_chanpairs(session, min_pair_dist=min_pair_dist, max_pair_dist=max_pair_dist, bad_chans=xchange.ot_bad_chans())
+    flow.fill_table_chanpairs(session, pair_dist_min=pair_dist_min, pair_dist_max=pair_dist_max, bad_chans=bad_chans)
 
 #######################################################
 #  load files
@@ -108,15 +118,13 @@ reload(flow)
 ckeys_db = np.array(session.query(ChanPair.name).all()).flatten()[::2]
 logger.info(f'{len(ckeys_db)} potential corr keys')
 
-sr = 2000.0
+sr = samplerate_decimated
 keeplag = int(keeplag_sec * sr)
 
 simdat = {}
 for ck in ckeys_db:
     simdat[ck] = xutil.noise1d(keeplag, whiten_freqs, sr, scale=1)
 
-tt_change_percent = 0.001
-noise_scale = 0
 
 # for i, fname in enumerate(data_fles[:-1]):
 for i, fname in enumerate(data_fles[:100]):
@@ -135,9 +143,8 @@ for i, fname in enumerate(data_fles[:100]):
     ckeys_all_str = np.array([f"{k[0]}_{k[1]}"for k in xutil.unique_pairs(chan_names)])
     ckeys = np.array(sorted(list(set(ckeys_db) & set(ckeys_all_str))))
     ckeys_ix = xutil.index_ckeys_split(ckeys, chan_names)
-    logger.info(f'{len(ckeys)} matching ckeys')
-
     ckdict = dict(zip(ckeys, np.arange(len(ckeys))))
+    logger.info(f'{len(ckeys)} matching ckeys')
 
     logger.info(f'sim fill')
 

@@ -229,12 +229,12 @@ def fill_table_xcorrs(dc, sr, nstack, ckeys, starttime, endtime, session, rhandl
     session.commit()
 
 
-def fill_table_chanpairs(session, min_pair_dist=0, max_pair_dist=99999, bad_chans=None):
+def fill_table_chanpairs(session, pair_dist_min=0, pair_dist_max=99999, bad_chans=None):
 
     logger.info(f'Clear and fill ChanPair PSQL table')
     session.query(ChanPair).delete()
 
-    sta_pairs = session.query(StationPair).filter(StationPair.dist.between(min_pair_dist, max_pair_dist)).filter().all()
+    sta_pairs = session.query(StationPair).filter(StationPair.dist.between(pair_dist_min, pair_dist_max)).filter().all()
 
     rows = []
 
@@ -287,7 +287,7 @@ def sql_drop_tables(db):
 
 def measure_dvv_xcorrs(session, rhandle):
 
-    max_pair_dist = 1000
+    pair_dist_max = 1000
     coda_start_vel = 3200.
     sr = 1000.0
     coda_end_sec = 0.8
@@ -296,7 +296,7 @@ def measure_dvv_xcorrs(session, rhandle):
     nrecent = 10
 
     ckeys = np.unique(session.query(XCorr.ckey).all())
-    cpairs = session.query(ChanPair).filter(ChanPair.ckey.in_(ckeys)).filter(ChanPair.dist < max_pair_dist).all()
+    cpairs = session.query(ChanPair).filter(ChanPair.ckey.in_(ckeys)).filter(ChanPair.dist < pair_dist_max).all()
 
     for cpair in cpairs:
 

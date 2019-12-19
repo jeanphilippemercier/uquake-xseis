@@ -20,9 +20,18 @@ from xseis2.xsql import Base, Station, XCorr, ChanPair, StationDvv
 from loguru import logger
 import matplotlib.pyplot as plt
 
+from microquake.core.settings import settings
+
 plt.ion()
 
-################################
+#######################################################
+#  xcorr processing params
+#######################################################
+
+#######################################################
+#  connect to databases
+#######################################################
+
 logger.info('Connect to psql database')
 db_string = "postgres://postgres:postgres@localhost"
 db = create_engine(db_string)
@@ -37,19 +46,12 @@ rhandle = redis.Redis(host='localhost', port=6379, db=0)
 #  combine multiple
 #######################################################
 
+nhour_stack = settings.COMPUTE_XCORRS.stack_length_hours
+nrecent = 9999
+
 ckeys_db = np.array(session.query(XCorr.corr_key).distinct().order_by(XCorr.corr_key.asc()).all()).flatten()
-
-# ckeys_db = np.array(session.query(ChanPair.name).all()).flatten()
-
-# ckeys_db = np.unique(session.query(XCorr.corr_key).all())
-# ckeys = np.unique(session.query(XCorr.corr_key).all())[::100]
-# ckeys = session.query(XCorr.corr_key).filter(XCorr.corr_key.like(wild)).all()
 logger.info(f'{len(ckeys_db)} unique xcorr pairs in db')
 reload(flow)
-
-
-nrecent = 9999
-nhour_stack = 1
 
 # delete already stacked corrs
 delete_q = XCorr.__table__.delete().where(XCorr.length == nhour_stack)
@@ -75,6 +77,16 @@ ckeys_db = np.array(session.query(XCorr.corr_key).distinct().order_by(XCorr.corr
 # ckeys_db = np.unique(session.query(XCorr.corr_key).all())
 logger.info(f'{len(ckeys_db)} unique xcorr pairs in db')
 
+# params = settings.COMPUTE_VELCHANGE
+# whiten_freqs = np.array(params.whiten_corner_freqs)
+# cc_wlen_sec = params.wlen_sec
+# stepsize_sec = params.stepsize_sec
+# keeplag_sec = params.keeplag_sec
+# pair_dist_min = params.pair_dist_min
+# pair_dist_max = params.pair_dist_max
+# samplerate_decimated = params.samplerate_decimated
+# onebit = params.onebit_normalization
+
 
 reload(xutil)
 reload(xchange)
@@ -97,7 +109,8 @@ for i, ckey in enumerate(ckeys_db):
         print(f"{ckey} missing")
         continue
 
-    xcorrs = session.query(XCorr).filter_by(corr_key=ckey).filter(XCorr.length == nhour_stack).order_by(XCorr.start_time.desc()).limit(nrecent).all()[::-1]
+    xcorrs = session.query(XCorr).filter(XCorr.length == nhour_stack).filter_by(corr_key=ckey).order_by(XCorr.start_time.desc()).limit(nrecent).all()[::-1]
+    # xcorrs = session.query(XCorr).filter_by(corr_key=ckey).filter(XCorr.length == nhour_stack).order_by(XCorr.start_time.desc()).limit(nrecent).all()[::-1]
     flow.xcorr_load_waveforms(xcorrs, rhandle)
 
     xcorrs_dat = np.array([x.waveform for x in xcorrs])
@@ -124,6 +137,10 @@ for i, ckey in enumerate(ckeys_db):
 reload(xchange)
 plt.plot(xref_sig)
 plt.plot(xcur_sig)
+
+%%timeit
+# xcorrs = session.query(XCorr).filter(XCorr.length == nhour_stack).filter_by(corr_key=ckey).order_by(XCorr.start_time.desc()).limit(nrecent).all()[::-1]
+xcorrs = session.query(XCorr).filter_by(corr_key=ckey).filter(XCorr.length == nhour_stack).order_by(XCorr.start_time.desc()).limit(nrecent).all()[::-1]
 #######################################################
 #  average dvv stations
 #######################################################
@@ -144,7 +161,7 @@ for sta in stas:
     # plt.plot(dvv, alpha=0.4)
     plt.plot(np.cumsum(dvv))
 
-
+#################################
 ckeys = flow.unique_ordered(session, XCorr.corr_key)
 
 for i, ckey in enumerate(ckeys):
@@ -161,7 +178,6 @@ for i, ckey in enumerate(ckeys):
     # plt.plot(dvv)
     plt.plot(dvv, alpha=0.4)
     # plt.plot(np.cumsum(dvv), alpha=0.2)
-
 
 
 #######################################################
@@ -804,3 +820,9 @@ xplot.set_axes_equal(ax)
 plt.tight_layout()
 
 np.sort(np.array([sta.name for sta in stations], dtype=int))
+
+
+# ckeys_db = np.array(session.query(ChanPair.name).all()).flatten()
+# ckeys_db = np.unique(session.query(XCorr.corr_key).all())
+# ckeys = np.unique(session.query(XCorr.corr_key).all())[::100]
+# ckeys = session.query(XCorr.corr_key).filter(XCorr.corr_key.like(wild)).all()

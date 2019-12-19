@@ -75,11 +75,19 @@ ckeys = xchange.ot_best_pairs()
 reload(xchange)
 
 # ckey = ckeys[1]
-ckey = ckeys_db[500]
+ckey = ckeys_db[600]
 cpair = session.query(ChanPair).filter_by(name=ckey).first()
+
+dist = cpair.dist
+coda_start_sec = dist / coda_start_vel
+print(f"{ckey}: {dist:.2f}m")
+
 
 xcorrs = session.query(XCorr).filter_by(corr_key=ckey).order_by(XCorr.start_time.desc()).limit(nrecent).all()[::-1]
 flow.xcorr_load_waveforms(xcorrs, rhandle)
+kept = np.array([x.nstack for x in xcorrs])
+dtimes = np.array([x.start_time for x in xcorrs])
+
 xcorrs_dat = np.array([x.waveform for x in xcorrs])
 # xcorrs_dat = xutil.average_adjacent_rows(xcorrs_dat_raw, nrow_avg=nrow_avg)
 ncc, cclen = xcorrs_dat.shape
@@ -96,7 +104,7 @@ reload(xplot)
 
 # snr, sig, noise = xchange.assess_snr(xcorrs_dat, nsmooth=20)
 # snr, sig, noise = xchange.assess_snr(xcorrs_dat_raw, nsmooth=20)
-snr, sig, noise = xchange.assess_snr(xcorrs_dat[:], nsmooth=10)
+snr, sig, noise = xchange.assess_snr(xcorrs_dat[:], nsmooth=20)
 
 plt.plot(times, snr, color='red', label='snr')
 # plt.ylabel("snr (s)")

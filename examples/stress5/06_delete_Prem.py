@@ -21,7 +21,8 @@ import shutil
 
 # from microquake.core.helpers.time import get_time_zone
 
-flast = "ob_data_2019-12-03T22:24:18.873749Z.npz"
+
+flast = "ob_data_2019-12-06T14:06:12.349208Z.npz"
 
 # ddir = os.path.join(os.environ['SPP_COMMON'], "data_dump")
 
@@ -44,7 +45,6 @@ for i, fname in enumerate(data_fles[:]):
 
     if found:
         break
-
 
 
 # np.savez_compressed(fname, start_time=tstring, data=data, sr=dsr, chans=chan_names)
