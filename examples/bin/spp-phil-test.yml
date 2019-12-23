@@ -21,6 +21,11 @@ spec:
         secretKeyRef:
           name: spp-redis
           key: redis-password
+    - name: SPP_REDIS_VELOCITY_PASSWORD
+      valueFrom:
+        secretKeyRef:
+          name: spp-redis-velocity
+          key: redis-password
     - name: SPP_POSTGRES_USER
       valueFrom:
         secretKeyRef:
@@ -42,6 +47,10 @@ spec:
       value: "redis://:$(SPP_REDIS_PASSWORD)@spp-redis-dev-master:6379/0"
     - name: SPP_REDIS_RQ_URL
       value: "$(SPP_REDIS_URL)"
+    - name: SPP_REDIS_VELOCITY_URL
+      value: "redis://:$(SPP_REDIS_VELOCITY_PASSWORD)@spp-redis-velocity-master:6379/0"
+    - name: SPP_REDIS_RQ_URL
+      value: "$(SPP_REDIS_URL)"
     - name: SPP_CONFIG
       value: /app/config
     - name: SPP_TIMESCALE_PASSWORD
@@ -61,6 +70,14 @@ spec:
           key: sensor-postgresql-db
     - name: SPP_TIMESCALEDB_URL
       value: "postgres://$(SPP_TIMESCALE_USER):$(SPP_TIMESCALE_PASSWORD)@spp-timescale-postgresql:5432/"
+    - name: SPP_POSTGRES_VELOCITY_PASSWORD
+      value: velocitychange/4bnJjdWFnmf2NyHAgV
+    - name: SPP_POSTGRES_VELOCITY_USER
+      value: velocitychange
+    - name: SPP_POSTGRES_VELOCITY_NAME
+      value: velocitychange
+    - name: SPP_POSTGRES_VELOCITY_URL
+      value: "postgres://$(SPP_POSTGRES_VELOCITY_USER):$(SPP_POSTGRES_VELOCITY_PASSWORD)@spp-postgres-velocity-postgresql:5432/"
   volumes:
   - name: mypd
     flexVolume:

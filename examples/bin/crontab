@@ -9,10 +9,9 @@ PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
 
 # m h dom mon dow user	command
 
-# crontab -e
-# service cron restart
+
 */1 * * * * echo "hello" >> /app/common/phil_misc/log.txt
-*/1 * * * * python /app/bin/save_onebit_prem_test.py
+*/1 * * * * /ve/bin/python /app/bin/save_onebit_prem_test.py
 # */1 * * * * root echo "hello" >> /home/phil/data/oyu/spp_common/dump/log.txt
 
 # */10 * * * * python /app/bin/save_onebit_prem.py
@@ -24,3 +23,6 @@ PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
 # 52 6	1 * *	root	test -x /usr/sbin/anacron || ( cd / && run-parts --report /etc/cron.monthly )
 # @reboot root /usr/sbin/ntpd -n
 #
+
+crontab -e
+service cron restart
