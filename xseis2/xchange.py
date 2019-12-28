@@ -691,14 +691,16 @@ def xcorr_ckeys_stack_slices(rawdat, sr, ckeys, cc_wlen_sec, keeplag_sec, stepsi
 
             stack_flag[isig] = 1
 
-            if onebit is True:
-                sig[:] = np.sign(xutil.bandpass(sig, whiten_freqs[[0, -1]], sr))
-
             fsig = np.fft.rfft(sig, n=padlen)
 
             if whiten_win is not None:
                 fsig = whiten_win * xutil.phase(fsig)
             else:
+                fsig /= np.sqrt(xutil.energy_freq(fsig))
+
+            if onebit is True:
+                sig = np.sign(np.fft.irfft(fsig))
+                fsig = np.fft.rfft(sig)
                 fsig /= np.sqrt(xutil.energy_freq(fsig))
 
             fdat[isig] = fsig

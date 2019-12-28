@@ -221,7 +221,7 @@ def fill_table_xcorrs(dc, sr, nstack, ckeys, starttime, endtime, session, rhandl
         dkey = f"{str(starttime)} {ckey}"
 
         pipe.set(dkey, xutil.array_to_bytes(sig))
-        rows.append(XCorr(corr_key=ckey, start_time=starttime, length=length_hours, nstack=float(nstack[i]), waveform_redis_key=dkey, samplerate=sr))
+        rows.append(XCorr(corr_key=ckey, start_time=starttime, length=length_hours, nstack=float(nstack[i]), waveform_redis_key=dkey, samplerate=sr, stacked=False))
         # rows.append(XCorr(corr_key=ckey, channel1_name=c1, channel2_name=c2, stationpair_name=spair, start_time=starttime, length=length_hours, nstack=float(nstack[i]), waveform_redis_key=dkey, samplerate=sr))
 
     pipe.execute()  # add data to redis
