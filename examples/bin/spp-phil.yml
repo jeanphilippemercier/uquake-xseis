@@ -1,0 +1,90 @@
+kind: Pod
+apiVersion: v1
+metadata:
+  name: spp-phil
+spec:
+  imagePullSecrets:
+  - name: regcred
+  containers:
+  - name: spp-container
+    image: registry.microquake.org/rio-tinto/seismic-processing-platform/spp
+    command:
+    - sh
+    - '-c'
+    - apt update ; apt install -y vim; apt install htop; apt install --yes screen; apt install --yes postgresql postgresql-contrib; apt install --yes redis-server; sleep 6000000
+    volumeMounts:
+    - mountPath: "/app/common"
+      name: mypd
+    env:
+    - name: SPP_REDIS_PASSWORD
+      valueFrom:
+        secretKeyRef:
+          name: spp-redis
+          key: redis-password
+    - name: SPP_REDIS_VELOCITY_PASSWORD
+      valueFrom:
+        secretKeyRef:
+          name: spp-redis-velocity
+          key: redis-password
+    - name: SPP_POSTGRES_USER
+      valueFrom:
+        secretKeyRef:
+          name: deployment-secrets
+          key: postgresql-user
+    - name: SPP_POSTGRES_PASSWORD
+      valueFrom:
+        secretKeyRef:
+          name: deployment-secrets
+          key: postgresql-password
+    - name: SPP_POSTGRES_DB
+      valueFrom:
+        secretKeyRef:
+          name: deployment-secrets
+          key: postgresql-db
+    - name: SPP_DATABASE_URL
+      value: "postgres://$(SPP_POSTGRES_USER):$(SPP_POSTGRES_PASSWORD)@spp-postgres-postgresql:5432/$(SPP_POSTGRES_DB)"
+    - name: SPP_REDIS_URL
+      value: "redis://:$(SPP_REDIS_PASSWORD)@spp-redis-dev-master:6379/0"
+    - name: SPP_REDIS_RQ_URL
+      value: "$(SPP_REDIS_URL)"
+    - name: SPP_REDIS_VELOCITY_URL
+      value: "redis://:$(SPP_REDIS_VELOCITY_PASSWORD)@spp-redis-velocity-master:6379/0"
+    - name: SPP_REDIS_RQ_URL
+      value: "$(SPP_REDIS_URL)"
+    - name: SPP_CONFIG
+      value: /app/config
+    - name: SPP_TIMESCALE_PASSWORD
+      valueFrom:
+        secretKeyRef:
+          name: deployment-secrets
+          key: sensor-postgresql-password
+    - name: SPP_TIMESCALE_USER
+      valueFrom:
+        secretKeyRef:
+          name: deployment-secrets
+          key: sensor-postgresql-user
+    - name: SPP_TIMESCALEDB_NAME
+      valueFrom:
+        secretKeyRef:
+          name: deployment-secrets
+          key: sensor-postgresql-db
+    - name: SPP_TIMESCALEDB_URL
+      value: "postgres://$(SPP_TIMESCALE_USER):$(SPP_TIMESCALE_PASSWORD)@spp-timescale-postgresql:5432/"
+    - name: SPP_POSTGRES_VELOCITY_PASSWORD
+      value: velocitychange/4bnJjdWFnmf2NyHAgV
+    - name: SPP_POSTGRES_VELOCITY_USER
+      value: velocitychange
+    - name: SPP_POSTGRES_VELOCITY_NAME
+      value: velocitychange
+    - name: SPP_POSTGRES_VELOCITY_URL
+      value: "postgres://$(SPP_POSTGRES_VELOCITY_USER):$(SPP_POSTGRES_VELOCITY_PASSWORD)@spp-postgres-velocity-postgresql:5432/"
+  volumes:
+  - name: mypd
+    flexVolume:
+      driver: ceph.rook.io/rook
+      fsType: ceph
+      options:
+        fsName: myfs # name of the filesystem specified in the filesystem CRD.
+        clusterNamespace: rook-ceph # namespace where the Rook cluster is deployed
+    # persistentVolumeClaim:
+    #   claimName: travel-time-grids-pvc
