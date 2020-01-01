@@ -15,7 +15,7 @@ from xseis2 import xplot
 from xseis2 import xutil
 from xseis2 import xchange
 from xseis2 import xchange_workflow as flow
-from xseis2.xsql import Base, Channel, Station, StationPair, StationDvv, XCorr, ChanPair, DataFile
+from xseis2.xsql import Base, Channel, Station, StationPair, StationDvv, XCorr, ChanPair
 # from sqlalchemy.sql import exists
 
 import itertools

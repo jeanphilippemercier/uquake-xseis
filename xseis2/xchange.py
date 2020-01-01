@@ -37,6 +37,20 @@ def ot_bad_chans():
       dtype='<U6')
 
 
+def signal_quality(sig):
+
+    npts = len(sig)
+    nans = len(np.where(sig == np.nan)[0])
+    zeros = len(np.where(sig == 0)[0])
+    pos_ratio = 100 * len(np.where(sig > 0)[0]) / npts
+    zeros_per = zeros / npts * 100
+    nans_per = nans / npts * 100
+
+    print(f"npts: {npts} | zeros: {zeros} ({zeros_per:.2f}%) | nans: {nans} ({nans_per:.2f}%) | npositive {pos_ratio:.3f}%")
+
+    return {'zeros': zeros_per, 'nans': nans_per, 'npos': pos_ratio}
+
+
 def cc_noise_level(dat):
     c1 = np.mean(dat ** 2, axis=0)
     c2 = np.mean(dat, axis=0) ** 2
@@ -676,7 +690,7 @@ def xcorr_ckeys_stack_slices(rawdat, sr, ckeys, cc_wlen_sec, keeplag_sec, stepsi
     stack_flag = np.zeros(nchan, dtype=bool)
 
     for i, sl in enumerate(slices):
-        print(f"stacking slice {i} / {nslices}")
+        # print(f"stacking slice {i} / {nslices}")
         fdat.fill(0)
 
         for isig in range(nchan):

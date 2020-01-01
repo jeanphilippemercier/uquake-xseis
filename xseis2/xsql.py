@@ -6,16 +6,6 @@ from sqlalchemy.dialects.postgresql import ARRAY
 Base = declarative_base()
 
 
-class DataFile(Base):
-    __tablename__ = 'datafile'
-
-    name = Column(String(50), primary_key=True)
-    status = Column(Boolean)
-
-    def __repr__(self):
-        return f"<DataFile ({self.name}) [processed_status: {self.status}]>"
-
-
 class Channel(Base):
     __tablename__ = 'channel'
 
@@ -82,21 +72,22 @@ class XCorr(Base):
     waveform_redis_key = Column(String(50))  # redis key of cross-correlation waveform
     samplerate = Column(Float)
 
-    # dvv = Column(ARRAY(Float))
-    stacked = Column(Boolean)
+    # status 0: unprocessed chunk  1: processed chunk  2: stacked (used for dvv)
+    status = Column(Integer)
     velocity_change = Column(Float)  # dv/v measurement versus reference trace
     error = Column(Float)
     pearson = Column(Float)  # pearson coeff with reference dvv trace (coda only)
 
     def __repr__(self):
 
-        return f"<Xcorr ({self.corr_key}) {self.start_time} [hours: {self.length:.2f}]  [dvv: {self.velocity_change}, error: {self.error}]"
+        return f"<Xcorr ({self.corr_key}) {self.start_time} [hours: {self.length:.2f}] [status: {self.status}] [dvv: {self.velocity_change}, error: {self.error}]"
 
 
 class StationDvv(Base):
     __tablename__ = 'stationdvv'
 
-    id = Column(Integer, primary_key=True)
+    id = Column(String(40), primary_key=True)
+    # id = Column(Integer, primary_key=True)
     station = Column(String(10))  # seismic station ID
     start_time = Column(DateTime)  # measurement start time
     length = Column(Float)  # length of stack in hours
@@ -106,7 +97,18 @@ class StationDvv(Base):
     navg = Column(Integer)  # number of chanpair measurements averaged
 
     def __repr__(self):
-        return f"<StationDvv ({self.station}) {self.start_time} [hours: {self.length:.2f}]  [dvv: {self.velocity_change}, error: {self.error}, navg: {self.navg}]>"
+        return f"<StationDvv ({self.station}) {self.start_time} [hours: {self.length:.2f}]  [dvv: {self.velocity_change:.4f}, error: {self.error:.2e}, navg: {self.navg}]>"
+
+
+# class DataFile(Base):
+#     __tablename__ = 'datafile'
+
+#     name = Column(String(50), primary_key=True)
+#     status = Column(Boolean)
+
+#     def __repr__(self):
+#         return f"<DataFile ({self.name}) [processed_status: {self.status}]>"
+
 
 
 # GET /api/v1/inventory/noise_correlations

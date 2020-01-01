@@ -1,33 +1,14 @@
-from importlib import reload
-import os
 import numpy as np
-import time
-# import h5py
-from glob import glob
-from datetime import datetime, timedelta
-
 import redis
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-from xseis2 import xplot
-from xseis2 import xutil
-from xseis2 import xchange
-from xseis2 import xchange_workflow as flow
-from xseis2.xsql import Base, Channel, Station, StationPair, StationDvv, XCorr, ChanPair, DataFile
-# from sqlalchemy.sql import exists
-
-import itertools
-
 from loguru import logger
-from obspy import UTCDateTime
-# from pytz import utc
-import matplotlib.pyplot as plt
-import pickle
-
 from microquake.core.settings import settings
 
-plt.ion()
+from xseis2 import xchange_workflow as flow
+from xseis2.xsql import Base
+
 
 #######################################################
 #  xcorr processing params
