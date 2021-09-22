@@ -1,3 +1,6 @@
 [submodule "cnpy"]
 	path = cnpy
 	url = https://github.com/microquake/cnpy.git
+[submodule "h5cpp"]
+	path = h5cpp
+	url = https://github.com/ess-dmsc/h5cpp.git
