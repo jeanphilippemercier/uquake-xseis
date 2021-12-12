@@ -2,6 +2,10 @@ build/
 xseis/xspy.cpp
 xseis2/xspy.cpp
 
+h5cpp
+
+.idea
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
