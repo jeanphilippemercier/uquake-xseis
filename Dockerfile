@@ -15,7 +15,7 @@ ADD . /src/xseis
 WORKDIR /src/xseis
 
 RUN pip install numpy
-# RUN CC=g++-7 CXX=g++-7 CFLAGS="-I/usr/include/hdf5/serial" pip install -e .
+RUN CC=g++-7 CXX=g++-7 CFLAGS="-I/usr/include/hdf5/serial" pip install -e .
 
 #RUN pip install obspy; pip install cython; apt install libhdf5-dev -y;  \
 #    apt-get install libfftw3-dev libfftw3-doc -y; add-apt-repository ppa:ubuntu-toolchain-r/test -y; \

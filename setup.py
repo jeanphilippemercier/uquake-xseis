@@ -11,12 +11,15 @@ from Cython.Distutils import build_ext
 __version__ = "0.1.8"
 
 requirements = [
-    'numpy'
+    'numpy',
+    'setuptools'
 ]
 
 setup_requires = [
     'cython'
 ]
+
+
 
 libcnpy = ('cnpy', {'sources': ['cnpy/cnpy.cpp']})
 
