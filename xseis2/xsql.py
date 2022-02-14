@@ -18,7 +18,9 @@ class Channel(Base):
     samplerate = Column(Float)
 
     def __repr__(self):
-        return f"<Channel ({self.name}) [samplerate: {self.samplerate} Hz] [quality: {self.quality}]>"
+        return f"<Channel ({self.name}) " \
+               f"[samplerate: {self.samplerate} Hz] " \
+               f"[quality: {self.quality}]>"
 
 
 class Station(Base):
@@ -80,7 +82,9 @@ class XCorr(Base):
 
     def __repr__(self):
 
-        return f"<Xcorr ({self.corr_key}) {self.start_time} [hours: {self.length:.2f}] [status: {self.status}] [dvv: {self.velocity_change}, error: {self.error}]"
+        return f"<Xcorr ({self.corr_key}) {self.start_time} " \
+               f"[hours: {self.length:.2f}] [status: {self.status}] " \
+               f"[dvv: {self.velocity_change}, error: {self.error}]"
 
 
 class StationDvv(Base):
