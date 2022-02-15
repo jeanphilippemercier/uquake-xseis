@@ -1,12 +1,14 @@
 import setuptools
 from distutils.command.build_clib import build_clib
 from distutils.core import Extension, setup
-
+import os
 import numpy as np
 from Cython.Build import cythonize
 from Cython.Distutils import build_ext
 
-# os.environ["CXX"] = "g++-7"
+os.environ["CXX"] = "gcc-8"
+os.environ["C_INCLUDE_PATH"] = "/usr/include/hdf5/serial"
+os.environ["CPLUS_INCLUDE_PATH"] = "/usr/include/hdf5/serial"
 
 __version__ = "0.1.8"
 
@@ -18,8 +20,6 @@ requirements = [
 setup_requires = [
     'cython'
 ]
-
-
 
 libcnpy = ('cnpy', {'sources': ['cnpy/cnpy.cpp']})
 

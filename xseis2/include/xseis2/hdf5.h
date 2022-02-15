@@ -5,7 +5,7 @@
 #include <assert.h>
 #include <numeric>
 
-#include "H5Cpp.h"
+#include "/usr/include/hdf5/serial/H5Cpp.h"
 #include "xseis2/core.h"
 
 
