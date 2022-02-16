@@ -6,16 +6,16 @@ import numpy as np
 from Cython.Build import cythonize
 from Cython.Distutils import build_ext
 
-os.environ["CXX"] = "gcc-8"
+# os.environ["CXX"] = "gcc-8"
 os.environ["C_INCLUDE_PATH"] = "/usr/include/hdf5/serial"
 os.environ["CPLUS_INCLUDE_PATH"] = "/usr/include/hdf5/serial"
-
-__version__ = "0.1.8"
 
 requirements = [
     'numpy',
     'setuptools'
 ]
+
+__version__ = '0.2.4'
 
 setup_requires = [
     'cython'

@@ -5,6 +5,12 @@
 ```bash
 # pull cnpy dependency
 git submodule update --init
+
+# compile and install cnpy
+cmake .
+make 
+sudo make install
+
 # pip install --user .
 
 # in ubuntu you might depend on g++7 or higher
@@ -33,4 +39,5 @@ sudo apt-get install libfftw3-dev libfftw3-doc -y
 sudo add-apt-repository ppa:ubuntu-toolchain-r/test -y
 sudo apt-get update
 sudo apt-get install gcc-7 g++-7 -y
+sudo apt-get install libomp-dev
 ```

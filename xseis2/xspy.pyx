@@ -71,8 +71,12 @@ def pySearchOnePhase(np.ndarray[np.float32_t, ndim=2] data,
 	stalocs = np.ascontiguousarray(stalocs)
 	data = np.ascontiguousarray(data)
 
+	print('radichou')
+
 	assert(data.shape[0] == chanmap.shape[0])
 	assert(tt_ptrs.shape[0] == stalocs.shape[0])
+
+	print('cramoisie')
 
 	# convert np array to std::vector
 	cdef vector[float] corner_freqs_vec
