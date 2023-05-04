@@ -1,7 +1,7 @@
 kind: Pod
 apiVersion: v1
 metadata:
-  name: spp-phil-test
+  name: spp-phil-tests
 spec:
   imagePullSecrets:
   - name: regcred

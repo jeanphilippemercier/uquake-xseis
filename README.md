@@ -36,7 +36,7 @@ pip3 install cython
 sudo apt install libhdf5-dev -y
 sudo apt-get install libfftw3-dev libfftw3-doc -y
 
-sudo add-apt-repository ppa:ubuntu-toolchain-r/test -y
+sudo add-apt-repository ppa:ubuntu-toolchain-r/tests -y
 sudo apt-get update
 sudo apt-get install gcc-7 g++-7 -y
 sudo apt-get install libomp-dev
