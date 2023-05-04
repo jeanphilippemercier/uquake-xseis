@@ -27,7 +27,7 @@ sudo apt-get install python3-tk
 pip3 install ipython
 pip3 install obspy
 pip3 install cython
-pip3 install kafka
+#pip3 install kafka
 ```
 
 ## Compile dependencies
